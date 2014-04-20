@@ -25,3 +25,9 @@ api/php/c.php
 api/java/Test.java
 src/util/test_sorted_set
 
+
+.cproject
+
+.project
+
+.settings/org.eclipse.core.resources.prefs
