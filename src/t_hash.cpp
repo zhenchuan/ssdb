@@ -1,6 +1,6 @@
 #include "t_hash.h"
 #include "ssdb.h"
-#include "leveldb/write_batch.h"
+#include "rocksdb/write_batch.h"
 
 static int hset_one(const SSDB *ssdb, const Bytes &name, const Bytes &key, const Bytes &val, char log_type);
 static int hdel_one(const SSDB *ssdb, const Bytes &name, const Bytes &key, char log_type);
@@ -28,7 +28,7 @@ static int incr_hsize(SSDB *ssdb, const Bytes &name, int64_t incr);
 //				return -1;
 //			}
 //		}
-//		leveldb::Status s = binlogs->commit();
+//		rocksdb::Status s = binlogs->commit();
 //		if(!s.ok()){
 //			log_error("zdel error: %s", s.ToString().c_str());
 //			return -1;
@@ -57,7 +57,7 @@ static int incr_hsize(SSDB *ssdb, const Bytes &name, int64_t incr);
 //				return -1;
 //			}
 //		}
-//		leveldb::Status s = binlogs->commit();
+//		rocksdb::Status s = binlogs->commit();
 //		if(!s.ok()){
 //			log_error("zdel error: %s", s.ToString().c_str());
 //			return -1;
@@ -79,7 +79,7 @@ int SSDB::hset(const Bytes &name, const Bytes &key, const Bytes &val, char log_t
 				return -1;
 			}
 		}
-		leveldb::Status s = binlogs->commit();
+		rocksdb::Status s = binlogs->commit();
 		if(!s.ok()){
 			return -1;
 		}
@@ -97,7 +97,7 @@ int SSDB::hdel(const Bytes &name, const Bytes &key, char log_type){
 				return -1;
 			}
 		}
-		leveldb::Status s = binlogs->commit();
+		rocksdb::Status s = binlogs->commit();
 		if(!s.ok()){
 			return -1;
 		}
@@ -127,7 +127,7 @@ int SSDB::hincr(const Bytes &name, const Bytes &key, int64_t by, std::string *ne
 				return -1;
 			}
 		}
-		leveldb::Status s = binlogs->commit();
+		rocksdb::Status s = binlogs->commit();
 		if(!s.ok()){
 			return -1;
 		}
@@ -138,9 +138,9 @@ int SSDB::hincr(const Bytes &name, const Bytes &key, int64_t by, std::string *ne
 int64_t SSDB::hsize(const Bytes &name) const{
 	std::string size_key = encode_hsize_key(name);
 	std::string val;
-	leveldb::Status s;
+	rocksdb::Status s;
 
-	s = db->Get(leveldb::ReadOptions(), size_key, &val);
+	s = db->Get(rocksdb::ReadOptions(), size_key, &val);
 	if(s.IsNotFound()){
 		return 0;
 	}else if(!s.ok()){
@@ -156,7 +156,7 @@ int64_t SSDB::hsize(const Bytes &name) const{
 
 int SSDB::hget(const Bytes &name, const Bytes &key, std::string *val) const{
 	std::string dbkey = encode_hash_key(name, key);
-	leveldb::Status s = db->Get(leveldb::ReadOptions(), dbkey, val);
+	rocksdb::Status s = db->Get(rocksdb::ReadOptions(), dbkey, val);
 	if(s.IsNotFound()){
 		return 0;
 	}
@@ -279,7 +279,7 @@ static int incr_hsize(SSDB *ssdb, const Bytes &name, int64_t incr){
 	if(size == 0){
 		ssdb->binlogs->Delete(size_key);
 	}else{
-		ssdb->binlogs->Put(size_key, leveldb::Slice((char *)&size, sizeof(int64_t)));
+		ssdb->binlogs->Put(size_key, rocksdb::Slice((char *)&size, sizeof(int64_t)));
 	}
 	return 0;
 }

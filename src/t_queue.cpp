@@ -1,12 +1,12 @@
 #include "t_queue.h"
 #include "ssdb.h"
-#include "leveldb/write_batch.h"
+#include "rocksdb/write_batch.h"
 
-static int qget_by_seq(leveldb::DB* db, const Bytes &name, uint64_t seq, std::string *val){
+static int qget_by_seq(rocksdb::DB* db, const Bytes &name, uint64_t seq, std::string *val){
 	std::string key = encode_qitem_key(name, seq);
-	leveldb::Status s;
+	rocksdb::Status s;
 
-	s = db->Get(leveldb::ReadOptions(), key, val);
+	s = db->Get(rocksdb::ReadOptions(), key, val);
 	if(s.IsNotFound()){
 		return 0;
 	}else if(!s.ok()){
@@ -17,7 +17,7 @@ static int qget_by_seq(leveldb::DB* db, const Bytes &name, uint64_t seq, std::st
 	}
 }
 
-static int qget_uint64(leveldb::DB* db, const Bytes &name, uint64_t seq, uint64_t *ret){
+static int qget_uint64(rocksdb::DB* db, const Bytes &name, uint64_t seq, uint64_t *ret){
 	std::string val;
 	*ret = 0;
 	int s = qget_by_seq(db, name, seq, &val);
@@ -32,7 +32,7 @@ static int qget_uint64(leveldb::DB* db, const Bytes &name, uint64_t seq, uint64_
 
 static int qdel_one(SSDB *ssdb, const Bytes &name, uint64_t seq){
 	std::string key = encode_qitem_key(name, seq);
-	leveldb::Status s;
+	rocksdb::Status s;
 
 	ssdb->binlogs->Delete(key);
 	return 0;
@@ -40,7 +40,7 @@ static int qdel_one(SSDB *ssdb, const Bytes &name, uint64_t seq){
 
 static int qset_one(SSDB *ssdb, const Bytes &name, uint64_t seq, const Bytes &item){
 	std::string key = encode_qitem_key(name, seq);
-	leveldb::Status s;
+	rocksdb::Status s;
 
 	ssdb->binlogs->Put(key, item.Slice());
 	return 0;
@@ -57,7 +57,7 @@ static int64_t incr_qsize(SSDB *ssdb, const Bytes &name, int64_t incr){
 		qdel_one(ssdb, name, QFRONT_SEQ);
 		qdel_one(ssdb, name, QBACK_SEQ);
 	}else{
-		ssdb->binlogs->Put(encode_qsize_key(name), leveldb::Slice((char *)&size, sizeof(size)));
+		ssdb->binlogs->Put(encode_qsize_key(name), rocksdb::Slice((char *)&size, sizeof(size)));
 	}
 	return size;
 }
@@ -68,8 +68,8 @@ int64_t SSDB::qsize(const Bytes &name){
 	std::string key = encode_qsize_key(name);
 	std::string val;
 
-	leveldb::Status s;
-	s = db->Get(leveldb::ReadOptions(), key, &val);
+	rocksdb::Status s;
+	s = db->Get(rocksdb::ReadOptions(), key, &val);
 	if(s.IsNotFound()){
 		return 0;
 	}else if(!s.ok()){
@@ -162,7 +162,7 @@ int64_t SSDB::_qpush(const Bytes &name, const Bytes &item, uint64_t front_or_bac
 		return -1;
 	}
 
-	leveldb::Status s = binlogs->commit();
+	rocksdb::Status s = binlogs->commit();
 	if(!s.ok()){
 		log_error("Write error!");
 		return -1;
@@ -227,7 +227,7 @@ int SSDB::_qpop(const Bytes &name, std::string *item, uint64_t front_or_back_seq
 		}
 	}
 		
-	leveldb::Status s = binlogs->commit();
+	rocksdb::Status s = binlogs->commit();
 	if(!s.ok()){
 		log_error("Write error!");
 		return -1;
@@ -304,12 +304,12 @@ int SSDB::qfix(const Bytes &name){
 		qdel_one(this, name, QFRONT_SEQ);
 		qdel_one(this, name, QBACK_SEQ);
 	}else{
-		this->binlogs->Put(encode_qsize_key(name), leveldb::Slice((char *)&count, sizeof(count)));
+		this->binlogs->Put(encode_qsize_key(name), rocksdb::Slice((char *)&count, sizeof(count)));
 		qset_one(this, name, QFRONT_SEQ, Bytes(&seq_min, sizeof(seq_min)));
 		qset_one(this, name, QBACK_SEQ, Bytes(&seq_max, sizeof(seq_max)));
 	}
 		
-	leveldb::Status s = binlogs->commit();
+	rocksdb::Status s = binlogs->commit();
 	if(!s.ok()){
 		log_error("Write error!");
 		return -1;

@@ -6,7 +6,7 @@
 #include "t_queue.h"
 #include "include.h"
 
-Slave::Slave(SSDB *ssdb, leveldb::DB* meta_db, const char *ip, int port, bool is_mirror){
+Slave::Slave(SSDB *ssdb, rocksdb::DB* meta_db, const char *ip, int port, bool is_mirror){
 	thread_quit = false;
 	this->ssdb = ssdb;
 	this->meta_db = meta_db;
@@ -81,7 +81,7 @@ std::string Slave::status_key(){
 void Slave::load_status(){
 	std::string key = status_key();
 	std::string val;
-	leveldb::Status s = meta_db->Get(leveldb::ReadOptions(), key, &val);
+	rocksdb::Status s = meta_db->Get(rocksdb::ReadOptions(), key, &val);
 	if(s.ok()){
 		if(val.size() < sizeof(uint64_t)){
 			log_error("invalid format of status");
@@ -97,7 +97,7 @@ void Slave::save_status(){
 	std::string val;
 	val.append((char *)&this->last_seq, sizeof(uint64_t));
 	val.append(this->last_key);
-	meta_db->Put(leveldb::WriteOptions(), key, val);
+	meta_db->Put(rocksdb::WriteOptions(), key, val);
 }
 
 int Slave::connect(){

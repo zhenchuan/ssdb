@@ -2,7 +2,7 @@
 #define UTIL_BYTES_H_
 
 #include "../include.h"
-#include "leveldb/slice.h"
+#include "rocksdb/slice.h"
 #include "strings.h"
 
 // readonly
@@ -32,7 +32,7 @@ class Bytes{
 			size_ = str.size();
 		}
 
-		Bytes(const leveldb::Slice &slice){
+		Bytes(const rocksdb::Slice &slice){
 			data_ = slice.data();
 			size_ = slice.size();
 		}
@@ -64,8 +64,8 @@ class Bytes{
 			return r;
 		}
 
-		leveldb::Slice Slice() const{
-			return leveldb::Slice(data_, size_);
+		rocksdb::Slice Slice() const{
+			return rocksdb::Slice(data_, size_);
 		}
 
 		std::string String() const{

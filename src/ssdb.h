@@ -3,8 +3,9 @@
 
 #include "include.h"
 #include <vector>
-#include "leveldb/db.h"
-#include "leveldb/options.h"
+
+#include "rocksdb/db.h"
+#include "rocksdb/options.h"
 
 #include "util/log.h"
 #include "util/bytes.h"
@@ -21,9 +22,10 @@ class Slave;
 
 class SSDB{
 private:
-	leveldb::DB* db;
-	leveldb::DB* meta_db;
-	leveldb::Options options;
+	rocksdb::DB* db;
+	rocksdb::DB* meta_db;
+	rocksdb::Options options;
+
 
 	std::vector<Slave *> slaves;
 	

@@ -3,8 +3,8 @@
 
 #include <inttypes.h>
 #include <string>
-#include "leveldb/iterator.h"
-#include "leveldb/slice.h"
+#include "rocksdb/iterator.h"
+#include "rocksdb/slice.h"
 #include "util/bytes.h"
 
 class Iterator{
@@ -13,13 +13,13 @@ class Iterator{
 			FORWARD, BACKWARD
 		};
 	private:
-		leveldb::Iterator *it;
+		rocksdb::Iterator *it;
 		std::string end;
 		uint64_t limit;
 		bool is_first;
 		int direction;
 	public:
-		Iterator(leveldb::Iterator *it,
+		Iterator(rocksdb::Iterator *it,
 				const std::string &end,
 				uint64_t limit,
 				Direction direction=Iterator::FORWARD);

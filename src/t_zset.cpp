@@ -1,6 +1,6 @@
 #include <limits.h>
 #include "t_zset.h"
-#include "leveldb/write_batch.h"
+#include "rocksdb/write_batch.h"
 
 static const char *SSDB_SCORE_MIN		= "-9223372036854775808";
 static const char *SSDB_SCORE_MAX		= "+9223372036854775807";
@@ -22,7 +22,7 @@ int SSDB::zset(const Bytes &name, const Bytes &key, const Bytes &score, char log
 				return -1;
 			}
 		}
-		leveldb::Status s = binlogs->commit();
+		rocksdb::Status s = binlogs->commit();
 		if(!s.ok()){
 			log_error("zset error: %s", s.ToString().c_str());
 			return -1;
@@ -41,7 +41,7 @@ int SSDB::zdel(const Bytes &name, const Bytes &key, char log_type){
 				return -1;
 			}
 		}
-		leveldb::Status s = binlogs->commit();
+		rocksdb::Status s = binlogs->commit();
 		if(!s.ok()){
 			log_error("zdel error: %s", s.ToString().c_str());
 			return -1;
@@ -73,7 +73,7 @@ int SSDB::zincr(const Bytes &name, const Bytes &key, int64_t by, std::string *ne
 				return -1;
 			}
 		}
-		leveldb::Status s = binlogs->commit();
+		rocksdb::Status s = binlogs->commit();
 		if(!s.ok()){
 			log_error("zset error: %s", s.ToString().c_str());
 			return -1;
@@ -104,7 +104,7 @@ int SSDB::zincr(const Bytes &name, const Bytes &key, int64_t by, std::string *ne
 //				return -1;
 //			}
 //		}
-//		leveldb::Status s = binlogs->commit();
+//		rocksdb::Status s = binlogs->commit();
 //		if(!s.ok()){
 //			log_error("zdel error: %s", s.ToString().c_str());
 //			return -1;
@@ -133,7 +133,7 @@ int SSDB::zincr(const Bytes &name, const Bytes &key, int64_t by, std::string *ne
 //				return -1;
 //			}
 //		}
-//		leveldb::Status s = binlogs->commit();
+//		rocksdb::Status s = binlogs->commit();
 //		if(!s.ok()){
 //			log_error("zdel error: %s", s.ToString().c_str());
 //			return -1;
@@ -145,9 +145,9 @@ int SSDB::zincr(const Bytes &name, const Bytes &key, int64_t by, std::string *ne
 int64_t SSDB::zsize(const Bytes &name) const{
 	std::string size_key = encode_zsize_key(name);
 	std::string val;
-	leveldb::Status s;
+	rocksdb::Status s;
 
-	s = db->Get(leveldb::ReadOptions(), size_key, &val);
+	s = db->Get(rocksdb::ReadOptions(), size_key, &val);
 	if(s.IsNotFound()){
 		return 0;
 	}else if(!s.ok()){
@@ -163,7 +163,7 @@ int64_t SSDB::zsize(const Bytes &name) const{
 
 int SSDB::zget(const Bytes &name, const Bytes &key, std::string *score) const{
 	std::string buf = encode_zset_key(name, key);
-	leveldb::Status s = db->Get(leveldb::ReadOptions(), buf, score);
+	rocksdb::Status s = db->Get(rocksdb::ReadOptions(), buf, score);
 	if(s.IsNotFound()){
 		return 0;
 	}
@@ -453,7 +453,7 @@ static int incr_zsize(SSDB *ssdb, const Bytes &name, int64_t incr){
 	if(size == 0){
 		ssdb->binlogs->Delete(size_key);
 	}else{
-		ssdb->binlogs->Put(size_key, leveldb::Slice((char *)&size, sizeof(int64_t)));
+		ssdb->binlogs->Put(size_key, rocksdb::Slice((char *)&size, sizeof(int64_t)));
 	}
 	return 0;
 }

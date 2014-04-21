@@ -3,11 +3,11 @@
 
 #include "include.h"
 #include <string>
-#include "leveldb/db.h"
-#include "leveldb/options.h"
-#include "leveldb/slice.h"
-#include "leveldb/status.h"
-#include "leveldb/write_batch.h"
+#include "rocksdb/db.h"
+#include "rocksdb/options.h"
+#include "rocksdb/slice.h"
+#include "rocksdb/status.h"
+#include "rocksdb/write_batch.h"
 #include "util/thread.h"
 #include "util/bytes.h"
 
@@ -18,9 +18,9 @@ class Binlog{
 		static const unsigned int HEADER_LEN = sizeof(uint64_t) + 2;
 	public:
 		Binlog(){}
-		Binlog(uint64_t seq, char type, char cmd, const leveldb::Slice &key);
+		Binlog(uint64_t seq, char type, char cmd, const rocksdb::Slice &key);
 		
-		int load(const leveldb::Slice &s);
+		int load(const rocksdb::Slice &s);
 
 		uint64_t seq() const;
 		char type() const;
@@ -47,12 +47,12 @@ class BinlogQueue{
 #else
 	static const int LOG_QUEUE_SIZE  = 10000;
 #endif
-		leveldb::DB *db;
+		rocksdb::DB *db;
 		uint64_t min_seq;
 		uint64_t last_seq;
 		uint64_t tran_seq;
 		int capacity;
-		leveldb::WriteBatch batch;
+		rocksdb::WriteBatch batch;
 
 		volatile bool thread_quit;
 		static void* log_clean_thread_func(void *arg);
@@ -64,17 +64,17 @@ class BinlogQueue{
 	public:
 		Mutex mutex;
 
-		BinlogQueue(leveldb::DB *db);
+		BinlogQueue(rocksdb::DB *db);
 		~BinlogQueue();
 		
 		void begin();
 		void rollback();
-		leveldb::Status commit();
-		// leveldb put
-		void Put(const leveldb::Slice& key, const leveldb::Slice& value);
-		// leveldb delete
-		void Delete(const leveldb::Slice& key);
-		void add_log(char type, char cmd, const leveldb::Slice &key);
+		rocksdb::Status commit();
+		// rocksdb put
+		void Put(const rocksdb::Slice& key, const rocksdb::Slice& value);
+		// rocksdb delete
+		void Delete(const rocksdb::Slice& key);
+		void add_log(char type, char cmd, const rocksdb::Slice &key);
 		void add_log(char type, char cmd, const std::string &key);
 		
 		int get(uint64_t seq, Binlog *log) const;

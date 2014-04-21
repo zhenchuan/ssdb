@@ -1,6 +1,6 @@
 #include "iterator.h"
 
-Iterator::Iterator(leveldb::Iterator *it,
+Iterator::Iterator(rocksdb::Iterator *it,
 		const std::string &end,
 		uint64_t limit,
 		Direction direction)
