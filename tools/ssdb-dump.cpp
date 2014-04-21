@@ -5,10 +5,10 @@
 #include <string>
 #include <vector>
 
-#include "leveldb/db.h"
-#include "leveldb/options.h"
-#include "leveldb/slice.h"
-#include "leveldb/iterator.h"
+#include "rocksdb/db.h"
+#include "rocksdb/options.h"
+#include "rocksdb/slice.h"
+#include "rocksdb/iterator.h"
 
 #include "link.h"
 #include "include.h"
@@ -105,16 +105,16 @@ int main(int argc, char **argv){
 	link->send("dump", "A", "", "-1");
 	link->flush();
 
-	leveldb::DB* db;
-	leveldb::Options options;
-	leveldb::Status status;
+	rocksdb::DB* db;
+	rocksdb::Options options;
+	rocksdb::Status status;
 	options.create_if_missing = true;
 	options.write_buffer_size = 32 * 1024 * 1024;
-	options.compression = leveldb::kSnappyCompression;
+	options.compression = rocksdb::kSnappyCompression;
 
-	status = leveldb::DB::Open(options, data_dir.c_str(), &db);
+	status = rocksdb::DB::Open(options, data_dir.c_str(), &db);
 	if(!status.ok()){
-		printf("open leveldb: %s error!\n", output_folder);
+		printf("open rocksdb: %s error!\n", output_folder);
 		return 0;
 	}
 
@@ -157,11 +157,11 @@ int main(int argc, char **argv){
 					continue;
 				}
 				
-				leveldb::Slice k = key.Slice();
-				leveldb::Slice v = val.Slice();
-				status = db->Put(leveldb::WriteOptions(), k, v);
+				rocksdb::Slice k = key.Slice();
+				rocksdb::Slice v = val.Slice();
+				status = db->Put(rocksdb::WriteOptions(), k, v);
 				if(!status.ok()){
-					printf("put leveldb error!\n");
+					printf("put rocksdb error!\n");
 					printf("ERROR: failed to dump data!\n");
 					exit(0);
 				}
@@ -181,8 +181,8 @@ int main(int argc, char **argv){
 
 	/*
 	printf("checking data...\n");
-	leveldb::Iterator *it;
-	it = db->NewIterator(leveldb::ReadOptions());
+	rocksdb::Iterator *it;
+	it = db->NewIterator(rocksdb::ReadOptions());
 	int save_count = 0;
 	for(it->SeekToFirst(); it->Valid(); it->Next()){
 		save_count ++;
@@ -200,7 +200,7 @@ int main(int argc, char **argv){
 
 	{
 		std::string val;
-		if(db->GetProperty("leveldb.stats", &val)){
+		if(db->GetProperty("rocksdb.stats", &val)){
 			fprintf(stderr, "%s\n", val.c_str());
 		}
 	}
@@ -210,7 +210,7 @@ int main(int argc, char **argv){
 	
 	{
 		std::string val;
-		if(db->GetProperty("leveldb.stats", &val)){
+		if(db->GetProperty("rocksdb.stats", &val)){
 			fprintf(stderr, "%s\n", val.c_str());
 		}
 	}
