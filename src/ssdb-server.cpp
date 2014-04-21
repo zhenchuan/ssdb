@@ -2,7 +2,6 @@
 #include <vector>
 #include <string>
 #include <list>
-#include <google/profiler.h>
 #include "version.h"
 #include "ssdb.h"
 #include "link.h"
@@ -60,9 +59,7 @@ int main(int argc, char **argv){
 	
 	fdes = new Fdevents();
 
-	ProfilerStart("my.prof"); // 指定所生成的profile文件名
 	run(argc, argv);
-	ProfilerStop(); // 结束profiling
 
 	remove_pidfile();
 
