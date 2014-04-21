@@ -80,6 +80,8 @@ SSDB* SSDB::open(const Config &conf, const std::string &base_dir){
 	ssdb->options.block_size = block_size * 1024;
 	ssdb->options.write_buffer_size = write_buffer_size * 1024 * 1024;
 	//ssdb->options.compaction_speed = compaction_speed;
+	ssdb->options.target_file_size_base = 1024 * 1024 * 32;
+	ssdb->options.target_file_size_multiplier = 1;
 	if(compression == "yes"){
 		ssdb->options.compression = rocksdb::kSnappyCompression;
 	}else{
