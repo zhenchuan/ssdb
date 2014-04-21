@@ -74,14 +74,27 @@ SSDB* SSDB::open(const Config &conf, const std::string &base_dir){
 
 	SSDB *ssdb = new SSDB();
 	//
+	auto env = rocksdb::Env::Default();
+	env->SetBackgroundThreads(2,rocksdb::Env::LOW);
+	env->SetBackgroundThreads(1,rocksdb::Env::HIGH);
+	ssdb->options.env = env;
+	ssdb->options.max_background_compactions = 2;
+	ssdb->options.max_background_flushes = 1;
+	//
 	ssdb->options.create_if_missing = true;
 	ssdb->options.filter_policy = rocksdb::NewBloomFilterPolicy(10);
-	ssdb->options.block_cache = rocksdb::NewLRUCache(cache_size * 1048576);
+
+	ssdb->options.block_cache = rocksdb::NewLRUCache(cache_size * 1024 * 1024);
 	ssdb->options.block_size = block_size * 1024;
 	ssdb->options.write_buffer_size = write_buffer_size * 1024 * 1024;
 	//ssdb->options.compaction_speed = compaction_speed;
 	ssdb->options.target_file_size_base = 1024 * 1024 * 32;
 	ssdb->options.target_file_size_multiplier = 1;
+
+
+
+	ssdb->options.allow_os_buffer = true;
+	//ssdb->options.allow_mmap_writes = true;
 	if(compression == "yes"){
 		ssdb->options.compression = rocksdb::kSnappyCompression;
 	}else{
@@ -152,7 +165,8 @@ err:
 Iterator* SSDB::iterator(const std::string &start, const std::string &end, uint64_t limit) const{
 	rocksdb::Iterator *it;
 	rocksdb::ReadOptions iterate_options;
-	iterate_options.fill_cache = false;
+	iterate_options.fill_cache = true;
+	iterate_options.tailing = false;
 	it = db->NewIterator(iterate_options);
 	it->Seek(start);
 	if(it->Valid() && it->key() == start){
@@ -164,7 +178,8 @@ Iterator* SSDB::iterator(const std::string &start, const std::string &end, uint6
 Iterator* SSDB::rev_iterator(const std::string &start, const std::string &end, uint64_t limit) const{
 	rocksdb::Iterator *it;
 	rocksdb::ReadOptions iterate_options;
-	iterate_options.fill_cache = false;
+	iterate_options.fill_cache = true;
+	iterate_options.tailing = false;
 	it = db->NewIterator(iterate_options);
 	it->Seek(start);
 	if(!it->Valid()){
