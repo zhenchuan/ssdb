@@ -70,6 +70,7 @@ static int proc_multi_zset(Server *serv, Link *link, const Request &req, Respons
 	}else{
 		int num = 0;
 		const Bytes &name = req[1];
+		/****
 		std::vector<Bytes>::const_iterator it = req.begin() + 2;
 		for(; it != req.end(); it += 2){
 			const Bytes &key = *it;
@@ -82,6 +83,8 @@ static int proc_multi_zset(Server *serv, Link *link, const Request &req, Respons
 				num += ret;
 			}
 		}
+		***/
+		serv->ssdb->multi_zset(name,req,2);
 		resp->push_back("ok");
 		char buf[20];
 		sprintf(buf, "%d", num);

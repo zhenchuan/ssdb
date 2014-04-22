@@ -87,7 +87,7 @@ public:
 	int zset(const Bytes &name, const Bytes &key, const Bytes &score, char log_type=BinlogType::SYNC);
 	int zdel(const Bytes &name, const Bytes &key, char log_type=BinlogType::SYNC);
 	int zincr(const Bytes &name, const Bytes &key, int64_t by, std::string *new_val, char log_type=BinlogType::SYNC);
-	//int multi_zset(const Bytes &name, const std::vector<Bytes> &kvs, int offset=0, char log_type=BinlogType::SYNC);
+	int multi_zset(const Bytes &name, const std::vector<Bytes> &kvs, int offset=0, char log_type=BinlogType::SYNC);
 	//int multi_zdel(const Bytes &name, const std::vector<Bytes> &keys, int offset=0, char log_type=BinlogType::SYNC);
 	
 	int64_t zsize(const Bytes &name) const;

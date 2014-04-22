@@ -83,35 +83,35 @@ int SSDB::zincr(const Bytes &name, const Bytes &key, int64_t by, std::string *ne
 }
 
 // multi_zset work incorrect when same key occurs in kvs more than once
-//int SSDB::multi_zset(const Bytes &name, const std::vector<Bytes> &kvs, int offset, char log_type){
-//	Transaction trans(binlogs);
-//
-//	int ret = 0;
-//	std::vector<Bytes>::const_iterator it;
-//	it = kvs.begin() + offset;
-//	for(; it != kvs.end(); it += 2){
-//		const Bytes &key = *it;
-//		const Bytes &score = *(it + 1);
-//		int tmp = zset_one(this, name, key, score, log_type);
-//		if(tmp == -1){
-//			return -1;
-//		}
-//		ret += tmp;
-//	}
-//	if(ret >= 0){
-//		if(ret > 0){
-//			if(incr_zsize(this, name, ret) == -1){
-//				return -1;
-//			}
-//		}
-//		rocksdb::Status s = binlogs->commit();
-//		if(!s.ok()){
-//			log_error("zdel error: %s", s.ToString().c_str());
-//			return -1;
-//		}
-//	}
-//	return ret;
-//}
+int SSDB::multi_zset(const Bytes &name, const std::vector<Bytes> &kvs, int offset, char log_type){
+	Transaction trans(binlogs);
+
+	int ret = 0;
+	std::vector<Bytes>::const_iterator it;
+	it = kvs.begin() + offset;
+	for(; it != kvs.end(); it += 2){
+		const Bytes &key = *it;
+		const Bytes &score = *(it + 1);
+		int tmp = zset_one(this, name, key, score, log_type);
+		if(tmp == -1){
+			return -1;
+		}
+		ret += tmp;
+	}
+	if(ret >= 0){
+		if(ret > 0){
+			if(incr_zsize(this, name, ret) == -1){
+				return -1;
+			}
+		}
+		rocksdb::Status s = binlogs->commit();
+		if(!s.ok()){
+			log_error("zdel error: %s", s.ToString().c_str());
+			return -1;
+		}
+	}
+	return ret;
+}
 //
 //int SSDB::multi_zdel(const Bytes &name, const std::vector<Bytes> &keys, int offset, char log_type){
 //	Transaction trans(binlogs);
