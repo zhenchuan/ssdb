@@ -75,26 +75,43 @@ SSDB* SSDB::open(const Config &conf, const std::string &base_dir){
 	SSDB *ssdb = new SSDB();
 	//
 	auto env = rocksdb::Env::Default();
-	env->SetBackgroundThreads(2,rocksdb::Env::LOW);
-	env->SetBackgroundThreads(1,rocksdb::Env::HIGH);
+	env->SetBackgroundThreads(10,rocksdb::Env::LOW);
+	env->SetBackgroundThreads(10,rocksdb::Env::HIGH);
 	ssdb->options.env = env;
-	ssdb->options.max_background_compactions = 2;
-	ssdb->options.max_background_flushes = 1;
+	ssdb->options.max_background_compactions = 10;
+	ssdb->options.max_background_flushes = 10;//如果这里设置,就会用到高优先级的线程池,注意增加对应的高优先级的线程池的数量.
 	//
 	ssdb->options.create_if_missing = true;
 	ssdb->options.filter_policy = rocksdb::NewBloomFilterPolicy(10);
 
 	ssdb->options.block_cache = rocksdb::NewLRUCache(cache_size * 1024 * 1024);
-	ssdb->options.block_size = block_size * 1024;
-	ssdb->options.write_buffer_size = write_buffer_size * 1024 * 1024;
+	ssdb->options.block_size = 4 * 1024;
+
+	ssdb->options.write_buffer_size = 64 * 1024 * 1024;
+	ssdb->options.max_write_buffer_number = 4;
+	ssdb->options.min_write_buffer_number_to_merge = 2;
 	//ssdb->options.compaction_speed = compaction_speed;
-	ssdb->options.target_file_size_base = 1024 * 1024 * 32;
-	ssdb->options.target_file_size_multiplier = 1;
 
+	ssdb->options.target_file_size_base = 1024 * 1024 * 64;
+	//ssdb->options.target_file_size_multiplier = 10;
 
+	ssdb->options.inplace_update_support = true;
 
-	ssdb->options.allow_os_buffer = true;
+	//ssdb->options.compaction_style = rocksdb::CompactionStyle::kCompactionStyleUniversal;
+	ssdb->options.compaction_style = rocksdb::CompactionStyle::kCompactionStyleLevel;
+
+	ssdb->options.level0_file_num_compaction_trigger = 4;
+	ssdb->options.level0_stop_writes_trigger = 12;
+	ssdb->options.level0_slowdown_writes_trigger = 8;
+
+	ssdb->options.disable_seek_compaction = true;
+	//ssdb->options.bytes_per_sync = 4 * 1024 * 1024 ;
+
+	//ssdb->options.allow_os_buffer = true;
+
 	//ssdb->options.allow_mmap_writes = true;
+
+	//ssdb->options.statistics = rocksdb::CreateDBStatistics();
 	if(compression == "yes"){
 		ssdb->options.compression = rocksdb::kSnappyCompression;
 	}else{
@@ -116,6 +133,7 @@ SSDB* SSDB::open(const Config &conf, const std::string &base_dir){
 		log_error("open main_db failed");
 		goto err;
 	}
+
 	ssdb->binlogs = new BinlogQueue(ssdb->db);
 
 	{ // slaves
@@ -165,7 +183,7 @@ err:
 Iterator* SSDB::iterator(const std::string &start, const std::string &end, uint64_t limit) const{
 	rocksdb::Iterator *it;
 	rocksdb::ReadOptions iterate_options;
-	iterate_options.fill_cache = true;
+	iterate_options.fill_cache = false;//??? filter是每个block一个还是每个sstable一个?
 	iterate_options.tailing = false;
 	it = db->NewIterator(iterate_options);
 	it->Seek(start);
@@ -178,7 +196,7 @@ Iterator* SSDB::iterator(const std::string &start, const std::string &end, uint6
 Iterator* SSDB::rev_iterator(const std::string &start, const std::string &end, uint64_t limit) const{
 	rocksdb::Iterator *it;
 	rocksdb::ReadOptions iterate_options;
-	iterate_options.fill_cache = true;
+	iterate_options.fill_cache = false;
 	iterate_options.tailing = false;
 	it = db->NewIterator(iterate_options);
 	it->Seek(start);

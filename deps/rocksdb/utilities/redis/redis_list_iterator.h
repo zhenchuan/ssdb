@@ -3,11 +3,11 @@
  * RedisListIterator:
  * An abstraction over the "list" concept (e.g.: for redis lists).
  * Provides functionality to read, traverse, edit, and write these lists.
- *
+ * 
  * Upon construction, the RedisListIterator is given a block of list data.
  * Internally, it stores a pointer to the data and a pointer to current item.
  * It also stores a "result" list that will be mutated over time.
- *
+ * 
  * Traversal and mutation are done by "forward iteration".
  * The Push() and Skip() methods will advance the iterator to the next item.
  * However, Push() will also "write the current item to the result".
@@ -89,7 +89,7 @@ class RedisListIterator {
 
     // Good. The first bytes specify the number of elements
     length_ = DecodeFixed32(data_);
-    cur_byte_ = sizeof(length_);
+    cur_byte_ = sizeof(length_); //The current byte being read
 
     // If we have at least one element, point to that element.
     // Also, read the first integer of the element (specifying the size),

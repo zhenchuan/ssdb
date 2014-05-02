@@ -151,10 +151,9 @@ int SSDB::incr(const Bytes &key, int64_t by, std::string *new_val, char log_type
 	}
 	return 1;
 }
-
+//kv结构的Get默认的fill_cache=true
 int SSDB::get(const Bytes &key, std::string *val) const{
 	std::string buf = encode_kv_key(key);
-
 	rocksdb::Status s = db->Get(rocksdb::ReadOptions(), buf, val);
 	if(s.IsNotFound()){
 		return 0;

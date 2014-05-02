@@ -198,6 +198,8 @@ void BinlogQueue::rollback(){
 
 rocksdb::Status BinlogQueue::commit(){
 	rocksdb::WriteOptions write_opts;
+	write_opts.disableWAL = false;
+	write_opts.sync = false;
 	rocksdb::Status s = db->Write(write_opts, &batch);
 	if(s.ok()){
 		last_seq = tran_seq;
