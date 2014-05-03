@@ -258,12 +258,18 @@ static int _incr(SSDB *ssdb, const Request &req, Response *resp, int dir){
 	if(req.size() <= 1){
 		resp->push_back("client_error");
 	}else{
-		std::string new_val;
-		int64_t val = 1;
+		std::string new_val ;
+		//int64_t val = 1;
+		Bytes by ;
 		if(req.size() > 2){
-			val = req[2].Int64();
+			by = req[2];
+			//val = req[2].Int64();
 		}
-		int ret = ssdb->incr(req[1], dir * val, &new_val);
+
+		//TODO 此处会根据val的类型来判断是调用哪一个incr的方法.
+		//int ret = ssdb->incr(req[1], dir * val, &new_val);
+		int ret = ssdb->incr_zset(req[1],by,&new_val);
+
 		if(ret == -1){
 			resp->push_back("error");
 		}else{

@@ -1,4 +1,5 @@
 #include "t_kv.h"
+#include "util/strings.h"
 #include "rocksdb/write_batch.h"
 
 int SSDB::multi_set(const std::vector<Bytes> &kvs, int offset, char log_type){
@@ -123,6 +124,88 @@ int SSDB::del(const Bytes &key, char log_type){
 	}
 	return 1;
 }
+
+int SSDB::incr_zset(const Bytes &key,const Bytes &by,std::string *new_value,char log_type){
+
+	Transaction trans(binlogs);
+	std::string old;
+	//rocksdb::Slice value_; //将要重新被写入的value
+	std::string value_;
+	int ret = this->get(key,&old);
+	int total_size = 0;
+
+	if(ret == -1 ){
+		return -1;
+	}else if(ret == 0){
+		value_ = by.String();
+		total_size = by.size()/8;
+	}else{
+		//注意,incr或者set的数据,客户端都是排序好的 || 备注:目前的排序方式已经不再需要.
+		Decoder decoder_old(old.data(),old.size());
+		Decoder decoder_incrs(by.data(),by.size());
+		std::vector<uint64_t> olds = convert_chars_to_longs(decoder_old);
+		std::vector<uint64_t> incres = convert_chars_to_longs(decoder_incrs);
+		int size_i = incres.size(),size_j = olds.size();
+		for(int i =0 ; i<size_i;i++){
+			uint64_t encode_i = incres.at(i);
+			uint64_t v = encode_i >> 32;
+			uint64_t k = encode_i & 0xFFFFFFFF;
+			bool found = false;
+
+			for(int j =0 ;j<size_j ;j++){
+				uint64_t encode_j = olds.at(j);
+				uint64_t vv = (encode_j >> 32);
+				uint64_t kk = (encode_j & 0xFFFFFFFF);
+
+				if(k == kk){
+					found = true;
+					olds.at(j) = (((uint64_t)(v + vv)) << 32 | k);
+					//log_error("merged:%lld i:%ld i+:%ld j:%d j+:%d vv : %du kk: %du orign_kkvv : %llu"
+					//		" v : %lu k: %lu orign_kv : %llu",
+					//		olds.at(j),i,size_i,j,size_j,vv,kk,encode_j,v,k,encode_i);
+					break;
+				}
+			}
+			if(found==false){
+				//log_error("!found %lld %d %d",encode_i,v,k);
+				olds.push_back(encode_i);
+				//olds.push_back(((uint64_t)(v)) << 32 | k);
+			}
+
+		}
+		//TODO 更高效的排序方式.
+		std::sort(olds.begin(),olds.end());
+
+
+		std::string buf;
+		for(int j=0;j<olds.size();j++){
+
+			char encoded[sizeof(uint64_t)];
+			encode_uint64(olds.at(j),encoded);
+			value_.append(encoded,sizeof(encoded));
+
+			//log_error("encode %lld %ld",olds.at(j),sizeof(encoded));
+			//dump(encoded,8);
+		}
+
+		total_size = olds.size();
+		//value_ = rocksdb::Slice(buf);
+	}
+
+	*new_value = int64_to_str(total_size);
+	std::string buf = encode_kv_key(key);
+	binlogs->Put(buf,value_);
+	binlogs->add_log(log_type, BinlogCommand::KSET, buf);
+
+	rocksdb::Status s = binlogs->commit();
+	if(!s.ok()){
+		log_error("incr error: %s", s.ToString().c_str());
+		return -1;
+	}
+
+	return 1;
+}
+
 
 int SSDB::incr(const Bytes &key, int64_t by, std::string *new_val, char log_type){
 	Transaction trans(binlogs);
