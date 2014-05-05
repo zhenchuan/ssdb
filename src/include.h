@@ -54,6 +54,7 @@ public:
 	static const char ZSIZE		= 'Z';
 	static const char QUEUE		= 'q';
 	static const char QSIZE		= 'Q';
+	static const char IZSET		= 'i'; //ipinyou 的 sorted set.
 	static const char MIN_PREFIX = HASH;
 	static const char MAX_PREFIX = ZSET;
 };

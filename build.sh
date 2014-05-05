@@ -105,6 +105,7 @@ echo "CFLAGS = -std=gnu++0x -DNDEBUG -D__STDC_FORMAT_MACROS -Wall -O2 -Wno-sign-
 echo "CFLAGS += ${PLATFORM_CFLAGS}" >> build_config.mk
 #echo "CFLAGS += -I \"$LEVELDB_PATH/include\"" >> build_config.mk
 echo "CFLAGS += -I \"$ROCKSDB_PATH/include\"" >> build_config.mk
+echo "CFLAGS += -I \"$ROCKSDB_PATH/util\"" >> build_config.mk
 
 echo "CLIBS=" >> build_config.mk
 echo "CLIBS += ${PLATFORM_CLIBS}" >> build_config.mk
