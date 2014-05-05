@@ -58,6 +58,9 @@ public:
 	int setnx(const Bytes &key, const Bytes &val, char log_type=BinlogType::SYNC);
 	int del(const Bytes &key, char log_type=BinlogType::SYNC);
 	int incr(const Bytes &key, int64_t by, std::string *new_val, char log_type=BinlogType::SYNC);
+	//用来处理ipinyou的sortedset的场景.
+	int incr_zset(const Bytes &key, const Bytes &by, std::string *new_val, char log_type=BinlogType::SYNC);
+
 	int multi_set(const std::vector<Bytes> &kvs, int offset=0, char log_type=BinlogType::SYNC);
 	int multi_del(const std::vector<Bytes> &keys, int offset=0, char log_type=BinlogType::SYNC);
 	

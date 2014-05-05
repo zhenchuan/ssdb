@@ -189,7 +189,7 @@ int SSDB::incr_zset(const Bytes &key,const Bytes &by,std::string *new_value,char
 		}
 
 		total_size = olds.size();
-		//value_ = rocksdb::Slice(buf);
+		//value_ = rocksdb::Slice(buf);然后这个for循环结束后,用value_把
 	}
 
 	*new_value = int64_to_str(total_size);

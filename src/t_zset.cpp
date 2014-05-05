@@ -16,6 +16,7 @@ int SSDB::zset(const Bytes &name, const Bytes &key, const Bytes &score, char log
 	Transaction trans(binlogs);
 
 	int ret = zset_one(this, name, key, score, log_type);
+
 	if(ret >= 0){
 		if(ret > 0){
 			if(incr_zsize(this, name, ret) == -1){
@@ -392,6 +393,7 @@ static int zset_one(SSDB *ssdb, const Bytes &name, const Bytes &key, const Bytes
 		log_error("key too long!");
 		return -1;
 	}
+
 	std::string new_score = filter_score(score);
 	std::string old_score;
 	int found = ssdb->zget(name, key, &old_score);
