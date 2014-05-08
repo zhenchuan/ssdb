@@ -124,9 +124,28 @@ int SSDB::del(const Bytes &key, char log_type){
 	}
 	return 1;
 }
-
-int SSDB::incr_zset(const Bytes &key,const Bytes &by,std::string *new_value,char log_type){
-
+int SSDB::incr_zget(const Bytes &key,int offset,int limit,std::vector<std::string>& result) const{
+	std::string old;
+	int ret = this->get(key,&old);
+	if(ret>0){
+		Decoder decoder(old.data(),old.size());
+		uint64_t val ;
+		int i=0,j = 0;
+		while((decoder.read_uint64(&val))!=-1){//读出的是little_endian ?
+			i++;
+			if(i<=offset) continue;
+			if(j>limit)break;
+			val = (big_endian(val));
+			uint64_t v = val >> 32;
+			uint64_t k = val & 0xFFFFFFFF;
+			result.push_back(uint64_to_str(k));
+			result.push_back(uint64_to_str(v));
+			j++;
+		}
+	}
+	return 1;
+}
+int SSDB::incr_zset(const Bytes &key,const Bytes &by,std::string *new_value,char log_type) const{
 	Transaction trans(binlogs);
 	std::string old;
 	//rocksdb::Slice value_; //将要重新被写入的value
