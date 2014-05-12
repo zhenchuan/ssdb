@@ -11,6 +11,7 @@
 
 #include <memory>
 #include <algorithm>
+#include <limits>
 
 #include "db/dbformat.h"
 #include "db/merge_context.h"
@@ -29,8 +30,7 @@
 
 namespace rocksdb {
 
-MemTable::MemTable(const InternalKeyComparator& cmp,
-                   const Options& options)
+MemTable::MemTable(const InternalKeyComparator& cmp, const Options& options)
     : comparator_(cmp),
       refs_(0),
       kArenaBlockSize(OptimizeBlockSize(options.arena_block_size)),
@@ -38,6 +38,7 @@ MemTable::MemTable(const InternalKeyComparator& cmp,
       arena_(options.arena_block_size),
       table_(options.memtable_factory->CreateMemTableRep(
           comparator_, &arena_, options.prefix_extractor.get())),
+      num_entries_(0),
       flush_in_progress_(false),
       flush_completed_(false),
       file_number_(0),
@@ -51,9 +52,10 @@ MemTable::MemTable(const InternalKeyComparator& cmp,
   // gone wrong already.
   assert(!should_flush_);
   if (prefix_extractor_ && options.memtable_prefix_bloom_bits > 0) {
-    prefix_bloom_.reset(new DynamicBloom(options.memtable_prefix_bloom_bits,
-                                         options.bloom_locality,
-                                         options.memtable_prefix_bloom_probes));
+    prefix_bloom_.reset(new DynamicBloom(
+        options.memtable_prefix_bloom_bits, options.bloom_locality,
+        options.memtable_prefix_bloom_probes, nullptr,
+        options.memtable_prefix_bloom_huge_page_tlb_size));
   }
 }
 
@@ -62,7 +64,16 @@ MemTable::~MemTable() {
 }
 
 size_t MemTable::ApproximateMemoryUsage() {
-  return arena_.ApproximateMemoryUsage() + table_->ApproximateMemoryUsage();
+  size_t arena_usage = arena_.ApproximateMemoryUsage();
+  size_t table_usage = table_->ApproximateMemoryUsage();
+  // let MAX_USAGE =  std::numeric_limits<size_t>::max()
+  // then if arena_usage + total_usage >= MAX_USAGE, return MAX_USAGE.
+  // the following variation is to avoid numeric overflow.
+  if (arena_usage >= std::numeric_limits<size_t>::max() - table_usage) {
+    return std::numeric_limits<size_t>::max();
+  }
+  // otherwise, return the actual usage
+  return arena_usage + table_usage;
 }
 
 bool MemTable::ShouldFlushNow() const {
@@ -159,14 +170,12 @@ const char* EncodeKey(std::string* scratch, const Slice& target) {
 
 class MemTableIterator: public Iterator {
  public:
-  MemTableIterator(const MemTable& mem, const ReadOptions& options)
+  MemTableIterator(const MemTable& mem, const ReadOptions& options,
+                   bool enforce_total_order)
       : bloom_(nullptr),
         prefix_extractor_(mem.prefix_extractor_),
-        iter_(),
         valid_(false) {
-    if (options.prefix) {
-      iter_.reset(mem.table_->GetPrefixIterator(*options.prefix));
-    } else if (options.prefix_seek) {
+    if (prefix_extractor_ != nullptr && !enforce_total_order) {
       bloom_ = mem.prefix_bloom_.get();
       iter_.reset(mem.table_->GetDynamicPrefixIterator());
     } else {
@@ -217,7 +226,7 @@ class MemTableIterator: public Iterator {
  private:
   DynamicBloom* bloom_;
   const SliceTransform* const prefix_extractor_;
-  std::shared_ptr<MemTableRep::Iterator> iter_;
+  std::unique_ptr<MemTableRep::Iterator> iter_;
   bool valid_;
 
   // No copying allowed
@@ -225,8 +234,9 @@ class MemTableIterator: public Iterator {
   void operator=(const MemTableIterator&);
 };
 
-Iterator* MemTable::NewIterator(const ReadOptions& options) {
-  return new MemTableIterator(*this, options);
+Iterator* MemTable::NewIterator(const ReadOptions& options,
+    bool enforce_total_order) {
+  return new MemTableIterator(*this, options, enforce_total_order);
 }
 
 port::RWMutex* MemTable::GetLock(const Slice& key) {
@@ -260,6 +270,7 @@ void MemTable::Add(SequenceNumber s, ValueType type,
   memcpy(p, value.data(), val_size);
   assert((unsigned)(p + val_size - buf) == (unsigned)encoded_len);
   table_->Insert(handle);
+  num_entries_++;
 
   if (prefix_bloom_) {
     assert(prefix_extractor_);
@@ -477,7 +488,7 @@ bool MemTable::UpdateCallback(SequenceNumber seq,
   LookupKey lkey(key, seq);
   Slice memkey = lkey.memtable_key();
 
-  std::shared_ptr<MemTableRep::Iterator> iter(
+  std::unique_ptr<MemTableRep::Iterator> iter(
     table_->GetIterator(lkey.user_key()));
   iter->Seek(lkey.internal_key(), memkey.data());
 

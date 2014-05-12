@@ -33,6 +33,7 @@
 #include "db/compaction_picker.h"
 #include "db/column_family.h"
 #include "db/log_reader.h"
+#include "db/file_indexer.h"
 
 namespace rocksdb {
 
@@ -88,8 +89,7 @@ class Version {
     int seek_file_level;
   };
   void Get(const ReadOptions&, const LookupKey& key, std::string* val,
-           Status* status, MergeContext* merge_context,
-           GetStats* stats, const Options& db_option,
+           Status* status, MergeContext* merge_context, GetStats* stats,
            bool* value_found = nullptr);
 
   // Adds "stats" into the current state.  Returns true if a new
@@ -219,17 +219,22 @@ class Version {
   friend class UniversalCompactionPicker;
 
   class LevelFileNumIterator;
-  Iterator* NewConcatenatingIterator(const ReadOptions&,
-                                     const EnvOptions& soptions,
-                                     int level) const;
-  bool PrefixMayMatch(const ReadOptions& options, const EnvOptions& soptions,
-                      const Slice& internal_prefix, Iterator* level_iter) const;
+  class LevelFileIteratorState;
+
+  bool PrefixMayMatch(const ReadOptions& options, Iterator* level_iter,
+                      const Slice& internal_prefix) const;
 
   // Sort all files for this version based on their file size and
   // record results in files_by_size_. The largest files are listed first.
   void UpdateFilesBySize();
 
   ColumnFamilyData* cfd_;  // ColumnFamilyData to which this Version belongs
+  const InternalKeyComparator* internal_comparator_;
+  const Comparator* user_comparator_;
+  TableCache* table_cache_;
+  const MergeOperator* merge_operator_;
+  Logger* info_log_;
+  Statistics* db_statistics_;
   VersionSet* vset_;            // VersionSet to which this Version belongs
   Version* next_;               // Next version in linked list
   Version* prev_;               // Previous version in linked list
@@ -276,6 +281,7 @@ class Version {
   uint64_t version_number_;
 
   Version(ColumnFamilyData* cfd, VersionSet* vset, uint64_t version_number = 0);
+  FileIndexer file_indexer_;
 
   ~Version();
 

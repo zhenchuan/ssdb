@@ -238,7 +238,7 @@ class ColumnFamilyTest {
     return result;
   }
 
-  int CountLiveFiles(int cf) {
+  int CountLiveFiles() {
     std::vector<LiveFileMetaData> metadata;
     db_->GetLiveFilesMetaData(&metadata);
     return static_cast<int>(metadata.size());
@@ -347,7 +347,7 @@ TEST(ColumnFamilyTest, DontReuseColumnFamilyID) {
     CreateColumnFamilies({"three2"});
     // ID 3 that was used for dropped column family "three" should not be reused
     auto cfh3 = reinterpret_cast<ColumnFamilyHandleImpl*>(handles_[3]);
-    ASSERT_EQ(4, cfh3->GetID());
+    ASSERT_EQ(4U, cfh3->GetID());
     Close();
     Destroy();
   }
@@ -396,10 +396,10 @@ TEST(ColumnFamilyTest, DropTest) {
     }
     ASSERT_EQ("bar1", Get(1, "1"));
 
-    ASSERT_EQ(CountLiveFiles(1), 1);
+    ASSERT_EQ(CountLiveFiles(), 1);
     DropColumnFamilies({1});
     // make sure that all files are deleted when we drop the column family
-    ASSERT_EQ(CountLiveFiles(1), 0);
+    ASSERT_EQ(CountLiveFiles(), 0);
     Destroy();
   }
 }
@@ -545,6 +545,7 @@ TEST(ColumnFamilyTest, FlushTest) {
 
 // Makes sure that obsolete log files get deleted
 TEST(ColumnFamilyTest, LogDeletionTest) {
+  db_options_.max_total_wal_size = std::numeric_limits<uint64_t>::max();
   column_family_options_.write_buffer_size = 100000;  // 100KB
   Open();
   CreateColumnFamilies({"one", "two", "three", "four"});
@@ -611,6 +612,8 @@ TEST(ColumnFamilyTest, LogDeletionTest) {
 
 // Makes sure that obsolete log files get deleted
 TEST(ColumnFamilyTest, DifferentWriteBufferSizes) {
+  // disable flushing stale column families
+  db_options_.max_total_wal_size = std::numeric_limits<uint64_t>::max();
   Open();
   CreateColumnFamilies({"one", "two", "three"});
   ColumnFamilyOptions default_cf, one, two, three;
@@ -922,7 +925,7 @@ TEST(ColumnFamilyTest, DontRollEmptyLogs) {
   Open();
   CreateColumnFamiliesAndReopen({"one", "two", "three", "four"});
 
-  for (int i = 0; i < handles_.size(); ++i) {
+  for (size_t i = 0; i < handles_.size(); ++i) {
     PutRandomData(i, 10, 100);
   }
   int num_writable_file_start = env_->GetNumberOfNewWritableFileCalls();
@@ -934,7 +937,36 @@ TEST(ColumnFamilyTest, DontRollEmptyLogs) {
   }
   int total_new_writable_files =
       env_->GetNumberOfNewWritableFileCalls() - num_writable_file_start;
-  ASSERT_EQ(total_new_writable_files, handles_.size() + 1);
+  ASSERT_EQ(static_cast<size_t>(total_new_writable_files), handles_.size() + 1);
+  Close();
+}
+
+TEST(ColumnFamilyTest, FlushStaleColumnFamilies) {
+  Open();
+  CreateColumnFamilies({"one", "two"});
+  ColumnFamilyOptions default_cf, one, two;
+  default_cf.write_buffer_size = 100000;  // small write buffer size
+  default_cf.disable_auto_compactions = true;
+  one.disable_auto_compactions = true;
+  two.disable_auto_compactions = true;
+  db_options_.max_total_wal_size = 210000;
+
+  Reopen({default_cf, one, two});
+
+  PutRandomData(2, 1, 10);  // 10 bytes
+  for (int i = 0; i < 2; ++i) {
+    PutRandomData(0, 100, 1000);  // flush
+    WaitForFlush(0);
+    ASSERT_EQ(i + 1, CountLiveFiles());
+  }
+  // third flush. now, CF [two] should be detected as stale and flushed
+  // column family 1 should not be flushed since it's empty
+  PutRandomData(0, 100, 1000);  // flush
+  WaitForFlush(0);
+  WaitForFlush(2);
+  // 3 files for default column families, 1 file for column family [two], zero
+  // files for column family [one], because it's empty
+  ASSERT_EQ(4, CountLiveFiles());
   Close();
 }
 

@@ -38,6 +38,12 @@ struct Options;
 
 using std::unique_ptr;
 
+enum ChecksumType : char {
+  kNoChecksum = 0x0,  // not yet supported. Will fail
+  kCRC32c = 0x1,
+  kxxHash = 0x2,
+};
+
 // For advanced user only
 struct BlockBasedTableOptions {
   // @flush_block_policy_factory creates the instances of flush block policy.
@@ -62,13 +68,16 @@ struct BlockBasedTableOptions {
     kBinarySearch,
 
     // The hash index, if enabled, will do the hash lookup when
-    // `ReadOption.prefix_seek == true`. User should also specify
-    // `Options.prefix_extractor` to allow the index block to correctly
-    // extract the prefix of the given key and perform hash table lookup.
+    // `Options.prefix_extractor` is provided.
     kHashSearch,
   };
 
   IndexType index_type = kBinarySearch;
+
+  // Use the specified checksum type. Newly created table files will be
+  // protected with this checksum type. Old table files will still be readable,
+  // even though they have different checksum type.
+  ChecksumType checksum = kCRC32c;
 };
 
 // Table Properties that are specific to block-based table properties.
@@ -98,12 +107,19 @@ extern TableFactory* NewBlockBasedTableFactory(
 //                    in the hash table
 // @index_sparseness: inside each prefix, need to build one index record for how
 //                    many keys for binary search inside each hash bucket.
+// @huge_page_tlb_size: if <=0, allocate hash indexes and blooms from malloc.
+//                      Otherwise from huge page TLB. The user needs to reserve
+//                      huge pages for it to be allocated, like:
+//                          sysctl -w vm.nr_hugepages=20
+//                      See linux doc Documentation/vm/hugetlbpage.txt
+
 const uint32_t kPlainTableVariableLength = 0;
 extern TableFactory* NewPlainTableFactory(uint32_t user_key_len =
                                               kPlainTableVariableLength,
                                           int bloom_bits_per_prefix = 10,
                                           double hash_table_ratio = 0.75,
-                                          size_t index_sparseness = 16);
+                                          size_t index_sparseness = 16,
+                                          size_t huge_page_tlb_size = 0);
 
 // -- Plain Table
 // This factory of plain table ignores Options.prefix_extractor and assumes no
@@ -117,9 +133,15 @@ extern TableFactory* NewPlainTableFactory(uint32_t user_key_len =
 //                  disable it by passing a zero.
 // @index_sparseness: need to build one index record for how many keys for
 //                    binary search.
+// @huge_page_tlb_size: if <=0, allocate hash indexes and blooms from malloc.
+//                      Otherwise from huge page TLB. The user needs to reserve
+//                      huge pages for it to be allocated, like:
+//                          sysctl -w vm.nr_hugepages=20
+//                      See linux doc Documentation/vm/hugetlbpage.txt
 extern TableFactory* NewTotalOrderPlainTableFactory(
     uint32_t user_key_len = kPlainTableVariableLength,
-    int bloom_bits_per_key = 0, size_t index_sparseness = 16);
+    int bloom_bits_per_key = 0, size_t index_sparseness = 16,
+    size_t huge_page_tlb_size = 0);
 
 #endif  // ROCKSDB_LITE
 

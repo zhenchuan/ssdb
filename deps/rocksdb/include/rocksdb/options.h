@@ -15,6 +15,7 @@
 #include <vector>
 #include <stdint.h>
 
+#include "rocksdb/version.h"
 #include "rocksdb/universal_compaction.h"
 
 namespace rocksdb {
@@ -497,6 +498,14 @@ struct ColumnFamilyOptions {
   // number of hash probes per key
   uint32_t memtable_prefix_bloom_probes;
 
+  // Page size for huge page TLB for bloom in memtable. If <=0, not allocate
+  // from huge page TLB but from malloc.
+  // Need to reserve huge pages for it to be allocated. For example:
+  //      sysctl -w vm.nr_hugepages=20
+  // See linux doc Documentation/vm/hugetlbpage.txt
+
+  size_t memtable_prefix_bloom_huge_page_tlb_size;
+
   // Control locality of bloom filter probes to improve cache miss rate.
   // This option only applies to memtable prefix bloom and plaintable
   // prefix bloom. It essentially limits the max number of cache lines each
@@ -576,6 +585,14 @@ struct DBOptions {
   // compaction. For universal-style compaction, you can usually set it to -1.
   // Default: 5000
   int max_open_files;
+
+  // Once write-ahead logs exceed this size, we will start forcing the flush of
+  // column families whose memtables are backed by the oldest live WAL file
+  // (i.e. the ones that are causing all the space amplification). If set to 0
+  // (default), we will dynamically choose the WAL size limit to be
+  // [sum of all write_buffer_size * max_write_buffer_number] * 2
+  // Default: 0
+  uint64_t max_total_wal_size;
 
   // If non-null, then we should collect metrics about database operations
   // Statistics objects should not be shared between DB instances as
@@ -817,7 +834,10 @@ struct ReadOptions {
 
   // If this option is set and memtable implementation allows, Seek
   // might only return keys with the same prefix as the seek-key
-  bool prefix_seek;
+  //
+  // ! DEPRECATED: prefix_seek is on by default when prefix_extractor
+  // is configured
+  // bool prefix_seek;
 
   // If "snapshot" is non-nullptr, read as of the supplied snapshot
   // (which must belong to the DB that is being read and which must
@@ -837,7 +857,9 @@ struct ReadOptions {
   // prefix, and SeekToLast() is not supported.  prefix filter with this
   // option will sometimes reduce the number of read IOPs.
   // Default: nullptr
-  const Slice* prefix;
+  //
+  // ! DEPRECATED
+  // const Slice* prefix;
 
   // Specify if this read request should process data that ALREADY
   // resides on a particular cache. If the required data is not
@@ -856,17 +878,13 @@ struct ReadOptions {
   ReadOptions()
       : verify_checksums(true),
         fill_cache(true),
-        prefix_seek(false),
         snapshot(nullptr),
-        prefix(nullptr),
         read_tier(kReadAllTier),
         tailing(false) {}
   ReadOptions(bool cksum, bool cache)
       : verify_checksums(cksum),
         fill_cache(cache),
-        prefix_seek(false),
         snapshot(nullptr),
-        prefix(nullptr),
         read_tier(kReadAllTier),
         tailing(false) {}
 };

@@ -156,7 +156,9 @@ case "$TARGET_OS" in
         exit 1
 esac
 
-$PWD/build_tools/build_detect_version
+if test -z "$DO_NOT_RUN_BUILD_DETECT_VERSION"; then
+  $PWD/build_tools/build_detect_version
+fi
 
 # We want to make a list of all cc files within util, db, table, and helpers
 # except for the test and benchmark files. By default, find will output a list
@@ -166,7 +168,7 @@ DIRS="util db table utilities"
 
 set -f # temporarily disable globbing so that our patterns arent expanded
 PRUNE_TEST="-name *test*.cc -prune"
-PRUNE_BENCH="-name *_bench.cc -prune"
+PRUNE_BENCH="-name *bench*.cc -prune"
 PORTABLE_FILES=`cd $ROCKSDB_ROOT; find $DIRS $PRUNE_TEST -o $PRUNE_BENCH -o -name '*.cc' -print | sort | tr "\n" " "`
 PORTABLE_CPP=`cd $ROCKSDB_ROOT; find $DIRS $PRUNE_TEST -o $PRUNE_BENCH -o -name '*.cpp' -print | sort | tr "\n" " "`
 set +f # re-enable globbing

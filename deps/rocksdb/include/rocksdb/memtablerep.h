@@ -148,16 +148,17 @@ class MemTableRep {
   // GetIterator().
   virtual Iterator* GetIterator(const Slice& user_key) { return GetIterator(); }
 
-  // Return an iterator over at least the keys with the specified prefix. The
-  // iterator may also allow access to other keys, but doesn't have to. Default:
-  // GetIterator().
-  virtual Iterator* GetPrefixIterator(const Slice& prefix) {
-    return GetIterator();
-  }
-
   // Return an iterator that has a special Seek semantics. The result of
   // a Seek might only include keys with the same prefix as the target key.
   virtual Iterator* GetDynamicPrefixIterator() { return GetIterator(); }
+
+  // Return true if the current MemTableRep supports merge operator.
+  // Default: true
+  virtual bool IsMergeOperatorSupported() const { return true; }
+
+  // Return true if the current MemTableRep supports snapshot
+  // Default: true
+  virtual bool IsSnapshotSupported() const { return true; }
 
  protected:
   // When *key is an internal key concatenated with the value, returns the
@@ -222,10 +223,48 @@ extern MemTableRepFactory* NewHashSkipListRepFactory(
 // The factory is to create memtables with a hashed linked list:
 // it contains a fixed array of buckets, each pointing to a sorted single
 // linked list (null if the bucket is empty).
-// bucket_count: number of fixed array buckets
+// @bucket_count: number of fixed array buckets
+// @huge_page_tlb_size: if <=0, allocate the hash table bytes from malloc.
+//                      Otherwise from huge page TLB. The user needs to reserve
+//                      huge pages for it to be allocated, like:
+//                          sysctl -w vm.nr_hugepages=20
+//                      See linux doc Documentation/vm/hugetlbpage.txt
 extern MemTableRepFactory* NewHashLinkListRepFactory(
-    size_t bucket_count = 50000);
+    size_t bucket_count = 50000, size_t huge_page_tlb_size = 0);
 
+// This factory creates a cuckoo-hashing based mem-table representation.
+// Cuckoo-hash is a closed-hash strategy, in which all key/value pairs
+// are stored in the bucket array itself intead of in some data structures
+// external to the bucket array.  In addition, each key in cuckoo hash
+// has a constant number of possible buckets in the bucket array.  These
+// two properties together makes cuckoo hash more memory efficient and
+// a constant worst-case read time.  Cuckoo hash is best suitable for
+// point-lookup workload.
+//
+// When inserting a key / value, it first checks whether one of its possible
+// buckets is empty.  If so, the key / value will be inserted to that vacant
+// bucket.  Otherwise, one of the keys originally stored in one of these
+// possible buckets will be "kicked out" and move to one of its possible
+// buckets (and possibly kicks out another victim.)  In the current
+// implementation, such "kick-out" path is bounded.  If it cannot find a
+// "kick-out" path for a specific key, this key will be stored in a backup
+// structure, and the current memtable to be forced to immutable.
+//
+// Note that currently this mem-table representation does not support
+// snapshot (i.e., it only queries latest state) and iterators.  In addition,
+// MultiGet operation might also lose its atomicity due to the lack of
+// snapshot support.
+//
+// Parameters:
+//   write_buffer_size: the write buffer size in bytes.
+//   average_data_size: the average size of key + value in bytes.  This value
+//     together with write_buffer_size will be used to compute the number
+//     of buckets.
+//   hash_function_count: the number of hash functions that will be used by
+//     the cuckoo-hash.  The number also equals to the number of possible
+//     buckets each key will have.
+extern MemTableRepFactory* NewHashCuckooRepFactory(
+    size_t write_buffer_size, size_t average_data_size = 64,
+    unsigned int hash_function_count = 4);
 #endif  // ROCKSDB_LITE
-
 }  // namespace rocksdb

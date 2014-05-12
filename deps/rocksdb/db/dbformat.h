@@ -32,6 +32,8 @@ enum ValueType : unsigned char {
   kTypeDeletion = 0x0,
   kTypeValue = 0x1,
   kTypeMerge = 0x2,
+  // Following types are used only in write ahead logs. They are not used in
+  // memtables or sst files:
   kTypeLogData = 0x3,
   kTypeColumnFamilyDeletion = 0x4,
   kTypeColumnFamilyValue = 0x5,
@@ -280,7 +282,7 @@ class IterKey {
       delete[] key_;
     }
     key_ = space_;
-    buf_size_ = sizeof(buf_size_);
+    buf_size_ = sizeof(space_);
     key_size_ = 0;
   }
 

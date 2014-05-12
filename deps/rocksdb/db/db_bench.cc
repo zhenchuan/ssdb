@@ -28,14 +28,15 @@
 #include "rocksdb/statistics.h"
 #include "rocksdb/perf_context.h"
 #include "port/port.h"
+#include "port/stack_trace.h"
 #include "util/crc32c.h"
 #include "util/histogram.h"
 #include "util/mutexlock.h"
 #include "util/random.h"
-#include "util/stack_trace.h"
 #include "util/string_util.h"
 #include "util/statistics.h"
 #include "util/testutil.h"
+#include "util/xxhash.h"
 #include "hdfs/env_hdfs.h"
 #include "utilities/merge_operators.h"
 
@@ -64,6 +65,7 @@ DEFINE_string(benchmarks,
               "randomwithverify,"
               "fill100K,"
               "crc32c,"
+              "xxhash,"
               "compress,"
               "uncompress,"
               "acquireload,",
@@ -107,6 +109,7 @@ DEFINE_string(benchmarks,
               "\tseekrandom    -- N random seeks\n"
               "\tseekrandom    -- 1 writer, N threads doing random seeks\n"
               "\tcrc32c        -- repeated crc32c of 4K of data\n"
+              "\txxhash        -- repeated xxHash of 4K of data\n"
               "\tacquireload   -- load N*1000 times\n"
               "Meta operations:\n"
               "\tcompact     -- Compact the entire DB\n"
@@ -116,7 +119,7 @@ DEFINE_string(benchmarks,
               "\theapprofile -- Dump a heap profile (if supported by this"
               " port)\n");
 
-DEFINE_int64(num, 1000001, "Number of key/values to place in database");
+DEFINE_int64(num, 1000000, "Number of key/values to place in database");
 
 DEFINE_int64(numdistinct, 1000,
              "Number of distinct keys to use. Used in RandomWithVerify to "
@@ -490,7 +493,8 @@ enum RepFactory {
   kSkipList,
   kPrefixHash,
   kVectorRep,
-  kHashLinkedList
+  kHashLinkedList,
+  kCuckoo
 };
 
 namespace {
@@ -505,6 +509,8 @@ enum RepFactory StringToRepFactory(const char* ctype) {
     return kVectorRep;
   else if (!strcasecmp(ctype, "hash_linkedlist"))
     return kHashLinkedList;
+  else if (!strcasecmp(ctype, "cuckoo"))
+    return kCuckoo;
 
   fprintf(stdout, "Cannot parse memreptable %s\n", ctype);
   return kSkipList;
@@ -880,6 +886,9 @@ class Benchmark {
       case kHashLinkedList:
         fprintf(stdout, "Memtablerep: hash_linkedlist\n");
         break;
+      case kCuckoo:
+        fprintf(stdout, "Memtablerep: cuckoo\n");
+        break;
     }
     fprintf(stdout, "Perf Level: %d\n", FLAGS_perf_level);
 
@@ -1228,6 +1237,8 @@ class Benchmark {
         method = &Benchmark::Compact;
       } else if (name == Slice("crc32c")) {
         method = &Benchmark::Crc32c;
+      } else if (name == Slice("xxhash")) {
+        method = &Benchmark::xxHash;
       } else if (name == Slice("acquireload")) {
         method = &Benchmark::AcquireLoad;
       } else if (name == Slice("compress")) {
@@ -1371,6 +1382,25 @@ class Benchmark {
     }
     // Print so result is not dead
     fprintf(stderr, "... crc=0x%x\r", static_cast<unsigned int>(crc));
+
+    thread->stats.AddBytes(bytes);
+    thread->stats.AddMessage(label);
+  }
+
+  void xxHash(ThreadState* thread) {
+    // Checksum about 500MB of data total
+    const int size = 4096;
+    const char* label = "(4K per op)";
+    std::string data(size, 'x');
+    int64_t bytes = 0;
+    unsigned int xxh32 = 0;
+    while (bytes < 500 * 1048576) {
+      xxh32 = XXH32(data.data(), size, 0);
+      thread->stats.FinishedSingleOp(nullptr);
+      bytes += size;
+    }
+    // Print so result is not dead
+    fprintf(stderr, "... xxh32=0x%x\r", static_cast<unsigned int>(xxh32));
 
     thread->stats.AddBytes(bytes);
     thread->stats.AddMessage(label);
@@ -1579,6 +1609,10 @@ class Benchmark {
           new VectorRepFactory
         );
         break;
+      case kCuckoo:
+        options.memtable_factory.reset(NewHashCuckooRepFactory(
+            options.write_buffer_size, FLAGS_key_size + FLAGS_value_size));
+        break;
     }
     if (FLAGS_use_plain_table) {
       if (FLAGS_rep_factory != kPrefixHash &&
@@ -1685,7 +1719,7 @@ class Benchmark {
       OpenDb(options, FLAGS_db, &db_);
     } else {
       multi_dbs_.clear();
-      for (size_t i = 0; i < FLAGS_num_multi_db; i++) {
+      for (int i = 0; i < FLAGS_num_multi_db; i++) {
         DB* db;
         OpenDb(options, GetDbNameForMultiple(FLAGS_db, i), &db);
         multi_dbs_.push_back(db);
@@ -1910,7 +1944,7 @@ class Benchmark {
     ReadOptions options(FLAGS_verify_checksum, true);
     std::vector<Slice> keys;
     std::vector<std::string> values(entries_per_batch_);
-    while (keys.size() < entries_per_batch_) {
+    while (static_cast<int64_t>(keys.size()) < entries_per_batch_) {
       keys.push_back(AllocateKey());
     }
 
@@ -1922,7 +1956,7 @@ class Benchmark {
             FLAGS_num, &keys[i]);
       }
       std::vector<Status> statuses = db->MultiGet(options, keys, &values);
-      assert(statuses.size() == entries_per_batch_);
+      assert(static_cast<int64_t>(statuses.size()) == entries_per_batch_);
 
       read += entries_per_batch_;
       for (int64_t i = 0; i < entries_per_batch_; ++i) {
@@ -1944,7 +1978,6 @@ class Benchmark {
   void IteratorCreation(ThreadState* thread) {
     Duration duration(FLAGS_duration, reads_);
     ReadOptions options(FLAGS_verify_checksum, true);
-    options.prefix_seek = (FLAGS_prefix_size > 0);
     while (!duration.Done(1)) {
       DB* db = SelectDB(thread);
       Iterator* iter = db->NewIterator(options);
@@ -1966,7 +1999,6 @@ class Benchmark {
     int64_t found = 0;
     ReadOptions options(FLAGS_verify_checksum, true);
     options.tailing = FLAGS_use_tailing_iterator;
-    options.prefix_seek = (FLAGS_prefix_size > 0);
 
     Iterator* single_iter = nullptr;
     std::vector<Iterator*> multi_iters;
@@ -2528,7 +2560,7 @@ class Benchmark {
 }  // namespace rocksdb
 
 int main(int argc, char** argv) {
-  rocksdb::InstallStackTraceHandler();
+  rocksdb::port::InstallStackTraceHandler();
   google::SetUsageMessage(std::string("\nUSAGE:\n") + std::string(argv[0]) +
                           " [OPTIONS]...");
   google::ParseCommandLineFlags(&argc, &argv, true);

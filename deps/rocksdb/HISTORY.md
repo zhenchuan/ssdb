@@ -1,14 +1,15 @@
 # Rocksdb Change Log
 
-## Unreleased (will be released in 3.0)
+## 3.0.0 (05/05/2014)
 
 ### Public API changes
 * Added _LEVEL to all InfoLogLevel enums
+* Deprecated ReadOptions.prefix and ReadOptions.prefix_seek. Seek() defaults to prefix-based seek when Options.prefix_extractor is supplied. More detail is documented in https://github.com/facebook/rocksdb/wiki/Prefix-Seek-API-Changes
 
 ### New Features
 * Column family support
-
-### Public API changes
+* Added an option to use different checksum functions in BlockBasedTableOptions
+* Added ApplyToAllCacheEntries() function to Cache
 
 ## 2.8.0 (04/04/2014)
 
@@ -24,7 +25,7 @@
 * Added Env::GetThreadPoolQueueLen(), which returns the waiting queue length of thread pools
 * Added a command "checkconsistency" in ldb tool, which checks
   if file system state matches DB state (file existence and file sizes)
-* Separate options related to block based table to a new struct BlockBasedTableOptions
+* Separate options related to block based table to a new struct BlockBasedTableOptions.
 * WriteBatch has a new function Count() to return total size in the batch, and Data() now returns a reference instead of a copy
 * Add more counters to perf context.
 * Supports several more DB properties: compaction-pending, background-errors and cur-size-active-mem-table.

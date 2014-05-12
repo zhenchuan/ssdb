@@ -182,6 +182,9 @@ class PosixSequentialFile: public SequentialFile {
     if (r < n) {
       if (feof(file_)) {
         // We leave status as ok if we hit the end of the file
+        // We also clear the error so that the reads can continue
+        // if a new data is written to the file
+        clearerr(file_);
       } else {
         // A partial read with an error: return a non-ok status
         s = IOError(filename_, errno);
@@ -761,6 +764,10 @@ class PosixWritableFile : public WritableFile {
   }
 
   virtual Status Sync() {
+    Status s = Flush();
+    if (!s.ok()) {
+      return s;
+    }
     TEST_KILL_RANDOM(rocksdb_kill_odds);
     if (pending_sync_ && fdatasync(fd_) < 0) {
       return IOError(filename_, errno);
@@ -771,6 +778,10 @@ class PosixWritableFile : public WritableFile {
   }
 
   virtual Status Fsync() {
+    Status s = Flush();
+    if (!s.ok()) {
+      return s;
+    }
     TEST_KILL_RANDOM(rocksdb_kill_odds);
     if (pending_fsync_ && fsync(fd_) < 0) {
       return IOError(filename_, errno);

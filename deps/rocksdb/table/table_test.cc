@@ -44,6 +44,11 @@
 
 namespace rocksdb {
 
+extern const uint64_t kLegacyBlockBasedTableMagicNumber;
+extern const uint64_t kLegacyPlainTableMagicNumber;
+extern const uint64_t kBlockBasedTableMagicNumber;
+extern const uint64_t kPlainTableMagicNumber;
+
 namespace {
 
 // Return reverse of "key".
@@ -307,11 +312,9 @@ class KeyConvertingIterator: public Iterator {
 class TableConstructor: public Constructor {
  public:
   explicit TableConstructor(const Comparator* cmp,
-                            bool convert_to_internal_key = false,
-                            bool prefix_seek = false)
+                            bool convert_to_internal_key = false)
       : Constructor(cmp),
-        convert_to_internal_key_(convert_to_internal_key),
-        prefix_seek_(prefix_seek) {}
+        convert_to_internal_key_(convert_to_internal_key) {}
   ~TableConstructor() { Reset(); }
 
   virtual Status FinishImpl(const Options& options,
@@ -352,9 +355,6 @@ class TableConstructor: public Constructor {
 
   virtual Iterator* NewIterator() const {
     ReadOptions ro;
-    if (prefix_seek_) {
-      ro.prefix_seek = true;
-    }
     Iterator* iter = table_reader_->NewIterator(ro);
     if (convert_to_internal_key_) {
       return new KeyConvertingIterator(iter);
@@ -388,7 +388,6 @@ class TableConstructor: public Constructor {
     source_.reset();
   }
   bool convert_to_internal_key_;
-  bool prefix_seek_;
 
   uint64_t uniq_id_;
   unique_ptr<StringSink> sink_;
@@ -434,7 +433,7 @@ class MemTableConstructor: public Constructor {
     return Status::OK();
   }
   virtual Iterator* NewIterator() const {
-    return new KeyConvertingIterator(memtable_->NewIterator());
+    return new KeyConvertingIterator(memtable_->NewIterator(ReadOptions()));
   }
 
  private:
@@ -699,7 +698,7 @@ class Harness {
         options_.prefix_extractor.reset(new FixedOrLessPrefixTransform(2));
         options_.allow_mmap_reads = true;
         options_.table_factory.reset(NewPlainTableFactory());
-        constructor_ = new TableConstructor(options_.comparator, true, true);
+        constructor_ = new TableConstructor(options_.comparator, true);
         internal_comparator_.reset(
             new InternalKeyComparator(options_.comparator));
         break;
@@ -709,7 +708,7 @@ class Harness {
         options_.prefix_extractor.reset(NewNoopTransform());
         options_.allow_mmap_reads = true;
         options_.table_factory.reset(NewPlainTableFactory());
-        constructor_ = new TableConstructor(options_.comparator, true, true);
+        constructor_ = new TableConstructor(options_.comparator, true);
         internal_comparator_.reset(
             new InternalKeyComparator(options_.comparator));
         break;
@@ -719,7 +718,7 @@ class Harness {
         options_.prefix_extractor = nullptr;
         options_.allow_mmap_reads = true;
         options_.table_factory.reset(NewTotalOrderPlainTableFactory());
-        constructor_ = new TableConstructor(options_.comparator, true, false);
+        constructor_ = new TableConstructor(options_.comparator, true);
         internal_comparator_.reset(
             new InternalKeyComparator(options_.comparator));
         break;
@@ -1476,7 +1475,6 @@ TEST(BlockBasedTableTest, BlockCacheLeak) {
   }
 }
 
-extern const uint64_t kPlainTableMagicNumber;
 TEST(PlainTableTest, BasicPlainTableProperties) {
   PlainTableFactory factory(8, 8, 0);
   StringSink sink;
@@ -1667,7 +1665,7 @@ TEST(MemTableTest, Simple) {
   ColumnFamilyMemTablesDefault cf_mems_default(memtable, &options);
   ASSERT_TRUE(WriteBatchInternal::InsertInto(&batch, &cf_mems_default).ok());
 
-  Iterator* iter = memtable->NewIterator();
+  Iterator* iter = memtable->NewIterator(ReadOptions());
   iter->SeekToFirst();
   while (iter->Valid()) {
     fprintf(stderr, "key: '%s' -> '%s'\n",
@@ -1720,6 +1718,83 @@ TEST(Harness, SimpleSpecialKey) {
     Random rnd(test::RandomSeed() + 4);
     Add("\xff\xff", "v3");
     Test(&rnd);
+  }
+}
+
+TEST(Harness, FooterTests) {
+  {
+    // upconvert legacy block based
+    std::string encoded;
+    Footer footer(kLegacyBlockBasedTableMagicNumber);
+    BlockHandle meta_index(10, 5), index(20, 15);
+    footer.set_metaindex_handle(meta_index);
+    footer.set_index_handle(index);
+    footer.EncodeTo(&encoded);
+    Footer decoded_footer;
+    Slice encoded_slice(encoded);
+    decoded_footer.DecodeFrom(&encoded_slice);
+    ASSERT_EQ(decoded_footer.table_magic_number(), kBlockBasedTableMagicNumber);
+    ASSERT_EQ(decoded_footer.checksum(), kCRC32c);
+    ASSERT_EQ(decoded_footer.metaindex_handle().offset(), meta_index.offset());
+    ASSERT_EQ(decoded_footer.metaindex_handle().size(), meta_index.size());
+    ASSERT_EQ(decoded_footer.index_handle().offset(), index.offset());
+    ASSERT_EQ(decoded_footer.index_handle().size(), index.size());
+  }
+  {
+    // xxhash block based
+    std::string encoded;
+    Footer footer(kBlockBasedTableMagicNumber);
+    BlockHandle meta_index(10, 5), index(20, 15);
+    footer.set_metaindex_handle(meta_index);
+    footer.set_index_handle(index);
+    footer.set_checksum(kxxHash);
+    footer.EncodeTo(&encoded);
+    Footer decoded_footer;
+    Slice encoded_slice(encoded);
+    decoded_footer.DecodeFrom(&encoded_slice);
+    ASSERT_EQ(decoded_footer.table_magic_number(), kBlockBasedTableMagicNumber);
+    ASSERT_EQ(decoded_footer.checksum(), kxxHash);
+    ASSERT_EQ(decoded_footer.metaindex_handle().offset(), meta_index.offset());
+    ASSERT_EQ(decoded_footer.metaindex_handle().size(), meta_index.size());
+    ASSERT_EQ(decoded_footer.index_handle().offset(), index.offset());
+    ASSERT_EQ(decoded_footer.index_handle().size(), index.size());
+  }
+  {
+    // upconvert legacy plain table
+    std::string encoded;
+    Footer footer(kLegacyPlainTableMagicNumber);
+    BlockHandle meta_index(10, 5), index(20, 15);
+    footer.set_metaindex_handle(meta_index);
+    footer.set_index_handle(index);
+    footer.EncodeTo(&encoded);
+    Footer decoded_footer;
+    Slice encoded_slice(encoded);
+    decoded_footer.DecodeFrom(&encoded_slice);
+    ASSERT_EQ(decoded_footer.table_magic_number(), kPlainTableMagicNumber);
+    ASSERT_EQ(decoded_footer.checksum(), kCRC32c);
+    ASSERT_EQ(decoded_footer.metaindex_handle().offset(), meta_index.offset());
+    ASSERT_EQ(decoded_footer.metaindex_handle().size(), meta_index.size());
+    ASSERT_EQ(decoded_footer.index_handle().offset(), index.offset());
+    ASSERT_EQ(decoded_footer.index_handle().size(), index.size());
+  }
+  {
+    // xxhash block based
+    std::string encoded;
+    Footer footer(kPlainTableMagicNumber);
+    BlockHandle meta_index(10, 5), index(20, 15);
+    footer.set_metaindex_handle(meta_index);
+    footer.set_index_handle(index);
+    footer.set_checksum(kxxHash);
+    footer.EncodeTo(&encoded);
+    Footer decoded_footer;
+    Slice encoded_slice(encoded);
+    decoded_footer.DecodeFrom(&encoded_slice);
+    ASSERT_EQ(decoded_footer.table_magic_number(), kPlainTableMagicNumber);
+    ASSERT_EQ(decoded_footer.checksum(), kxxHash);
+    ASSERT_EQ(decoded_footer.metaindex_handle().offset(), meta_index.offset());
+    ASSERT_EQ(decoded_footer.metaindex_handle().size(), meta_index.size());
+    ASSERT_EQ(decoded_footer.index_handle().offset(), index.offset());
+    ASSERT_EQ(decoded_footer.index_handle().size(), index.size());
   }
 }
 

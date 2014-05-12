@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <jni.h>
 #include <string>
+#include <vector>
 
 #include "include/org_rocksdb_RocksDB.h"
 #include "rocksjni/portal.h"
@@ -137,16 +138,9 @@ void Java_org_rocksdb_RocksDB_write(
 //////////////////////////////////////////////////////////////////////////////
 // rocksdb::DB::Get
 
-/*
- * Class:     org_rocksdb_RocksDB
- * Method:    get
- * Signature: (J[BI)[B
- */
-jbyteArray Java_org_rocksdb_RocksDB_get__J_3BI(
-    JNIEnv* env, jobject jdb, jlong jdb_handle,
+jbyteArray rocksdb_get_helper(
+    JNIEnv* env, rocksdb::DB* db, const rocksdb::ReadOptions& read_opt,
     jbyteArray jkey, jint jkey_len) {
-  auto db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
-
   jboolean isCopy;
   jbyte* key = env->GetByteArrayElements(jkey, &isCopy);
   rocksdb::Slice key_slice(
@@ -154,8 +148,7 @@ jbyteArray Java_org_rocksdb_RocksDB_get__J_3BI(
 
   std::string value;
   rocksdb::Status s = db->Get(
-      rocksdb::ReadOptions(),
-      key_slice, &value);
+      read_opt, key_slice, &value);
 
   // trigger java unref on key.
   // by passing JNI_ABORT, it will simply release the reference without
@@ -181,15 +174,37 @@ jbyteArray Java_org_rocksdb_RocksDB_get__J_3BI(
 /*
  * Class:     org_rocksdb_RocksDB
  * Method:    get
- * Signature: (J[BI[BI)I
+ * Signature: (J[BI)[B
  */
-jint Java_org_rocksdb_RocksDB_get__J_3BI_3BI(
+jbyteArray Java_org_rocksdb_RocksDB_get__J_3BI(
     JNIEnv* env, jobject jdb, jlong jdb_handle,
+    jbyteArray jkey, jint jkey_len) {
+  return rocksdb_get_helper(env,
+      reinterpret_cast<rocksdb::DB*>(jdb_handle),
+      rocksdb::ReadOptions(),
+      jkey, jkey_len);
+}
+
+/*
+ * Class:     org_rocksdb_RocksDB
+ * Method:    get
+ * Signature: (JJ[BI)[B
+ */
+jbyteArray Java_org_rocksdb_RocksDB_get__JJ_3BI(
+    JNIEnv* env, jobject jdb, jlong jdb_handle, jlong jropt_handle,
+    jbyteArray jkey, jint jkey_len) {
+  return rocksdb_get_helper(env,
+      reinterpret_cast<rocksdb::DB*>(jdb_handle),
+      *reinterpret_cast<rocksdb::ReadOptions*>(jropt_handle),
+      jkey, jkey_len);
+}
+
+jint rocksdb_get_helper(
+    JNIEnv* env, rocksdb::DB* db, const rocksdb::ReadOptions& read_options,
     jbyteArray jkey, jint jkey_len,
     jbyteArray jvalue, jint jvalue_len) {
   static const int kNotFound = -1;
   static const int kStatusError = -2;
-  auto db = reinterpret_cast<rocksdb::DB*>(jdb_handle);
 
   jbyte* key = env->GetByteArrayElements(jkey, 0);
   rocksdb::Slice key_slice(
@@ -199,7 +214,7 @@ jint Java_org_rocksdb_RocksDB_get__J_3BI_3BI(
   // a DB::Get() function which takes preallocated jbyte* as input.
   std::string cvalue;
   rocksdb::Status s = db->Get(
-      rocksdb::ReadOptions(), key_slice, &cvalue);
+      read_options, key_slice, &cvalue);
 
   // trigger java unref on key.
   // by passing JNI_ABORT, it will simply release the reference without
@@ -228,6 +243,121 @@ jint Java_org_rocksdb_RocksDB_get__J_3BI_3BI(
       jvalue, 0, length,
       reinterpret_cast<const jbyte*>(cvalue.c_str()));
   return cvalue_len;
+}
+
+jobject multi_get_helper(JNIEnv* env, jobject jdb, rocksdb::DB* db,
+    const rocksdb::ReadOptions& rOpt, jobject jkey_list, jint jkeys_count) {
+  std::vector<rocksdb::Slice> keys;
+  std::vector<jbyte*> keys_to_free;
+
+  // get iterator
+  jobject iteratorObj = env->CallObjectMethod(
+      jkey_list, rocksdb::ListJni::getIteratorMethod(env));
+
+  // iterate over keys and convert java byte array to slice
+  while(env->CallBooleanMethod(
+      iteratorObj, rocksdb::ListJni::getHasNextMethod(env)) == JNI_TRUE) {
+    jbyteArray jkey = (jbyteArray) env->CallObjectMethod(
+       iteratorObj, rocksdb::ListJni::getNextMethod(env));
+    jint key_length = env->GetArrayLength(jkey);
+
+    jbyte* key = new jbyte[key_length];
+    env->GetByteArrayRegion(jkey, 0, key_length, key);
+    // store allocated jbyte to free it after multiGet call
+    keys_to_free.push_back(key);
+
+    rocksdb::Slice key_slice(
+      reinterpret_cast<char*>(key), key_length);
+    keys.push_back(key_slice);
+  }
+
+  std::vector<std::string> values;
+  std::vector<rocksdb::Status> s = db->MultiGet(rOpt, keys, &values);
+
+  // Don't reuse class pointer
+  jclass jclazz = env->FindClass("java/util/ArrayList");
+  jmethodID mid = rocksdb::ListJni::getArrayListConstructorMethodId(
+      env, jclazz);
+  jobject jvalue_list = env->NewObject(jclazz, mid, jkeys_count);
+
+  // insert in java list
+  for(std::vector<rocksdb::Status>::size_type i = 0; i != s.size(); i++) {
+    if(s[i].ok()) {
+      jbyteArray jvalue = env->NewByteArray(values[i].size());
+      env->SetByteArrayRegion(
+          jvalue, 0, values[i].size(),
+          reinterpret_cast<const jbyte*>(values[i].c_str()));
+      env->CallBooleanMethod(
+          jvalue_list, rocksdb::ListJni::getListAddMethodId(env), jvalue);
+    }
+    else {
+      env->CallBooleanMethod(
+          jvalue_list, rocksdb::ListJni::getListAddMethodId(env), nullptr);
+    }
+  }
+
+  // free up allocated byte arrays
+  for(std::vector<jbyte*>::size_type i = 0; i != keys_to_free.size(); i++) {
+    delete[] keys_to_free[i];
+  }
+  keys_to_free.clear();
+
+  return jvalue_list;
+}
+
+/*
+ * Class:     org_rocksdb_RocksDB
+ * Method:    multiGet
+ * Signature: (JLjava/util/List;I)Ljava/util/List;
+ */
+jobject Java_org_rocksdb_RocksDB_multiGet__JLjava_util_List_2I(
+    JNIEnv* env, jobject jdb, jlong jdb_handle,
+    jobject jkey_list, jint jkeys_count) {
+  return multi_get_helper(env, jdb, reinterpret_cast<rocksdb::DB*>(jdb_handle),
+      rocksdb::ReadOptions(), jkey_list, jkeys_count);
+}
+
+/*
+ * Class:     org_rocksdb_RocksDB
+ * Method:    multiGet
+ * Signature: (JJLjava/util/List;I)Ljava/util/List;
+ */
+jobject Java_org_rocksdb_RocksDB_multiGet__JJLjava_util_List_2I(
+    JNIEnv* env, jobject jdb, jlong jdb_handle,
+    jlong jropt_handle, jobject jkey_list, jint jkeys_count) {
+  return multi_get_helper(env, jdb, reinterpret_cast<rocksdb::DB*>(jdb_handle),
+      *reinterpret_cast<rocksdb::ReadOptions*>(jropt_handle), jkey_list,
+      jkeys_count);
+}
+
+/*
+ * Class:     org_rocksdb_RocksDB
+ * Method:    get
+ * Signature: (J[BI[BI)I
+ */
+jint Java_org_rocksdb_RocksDB_get__J_3BI_3BI(
+    JNIEnv* env, jobject jdb, jlong jdb_handle,
+    jbyteArray jkey, jint jkey_len,
+    jbyteArray jvalue, jint jvalue_len) {
+  return rocksdb_get_helper(env,
+      reinterpret_cast<rocksdb::DB*>(jdb_handle),
+      rocksdb::ReadOptions(),
+      jkey, jkey_len, jvalue, jvalue_len);
+}
+
+/*
+ * Class:     org_rocksdb_RocksDB
+ * Method:    get
+ * Signature: (JJ[BI[BI)I
+ */
+jint Java_org_rocksdb_RocksDB_get__JJ_3BI_3BI(
+    JNIEnv* env, jobject jdb, jlong jdb_handle, jlong jropt_handle,
+    jbyteArray jkey, jint jkey_len,
+    jbyteArray jvalue, jint jvalue_len) {
+  return rocksdb_get_helper(env,
+      reinterpret_cast<rocksdb::DB*>(jdb_handle),
+      *reinterpret_cast<rocksdb::ReadOptions*>(jropt_handle),
+      jkey, jkey_len, jvalue, jvalue_len);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -285,14 +415,24 @@ void Java_org_rocksdb_RocksDB_remove__JJ_3BI(
 
 /*
  * Class:     org_rocksdb_RocksDB
- * Method:    close0
- * Signature: ()V
+ * Method:    dispose
+ * Signature: (J)V
  */
-void Java_org_rocksdb_RocksDB_close0(
-    JNIEnv* env, jobject java_db) {
-  rocksdb::DB* db = rocksdb::RocksDBJni::getHandle(env, java_db);
+void Java_org_rocksdb_RocksDB_dispose(
+    JNIEnv* env, jobject java_db, jlong jhandle) {
+  auto db = reinterpret_cast<rocksdb::DB*>(jhandle);
   assert(db != nullptr);
   delete db;
+}
 
-  rocksdb::RocksDBJni::setHandle(env, java_db, nullptr);
+/*
+ * Class:     org_rocksdb_RocksDB
+ * Method:    iterator0
+ * Signature: (J)J
+ */
+jlong Java_org_rocksdb_RocksDB_iterator0(
+    JNIEnv* env, jobject jdb, jlong db_handle) {
+  auto db = reinterpret_cast<rocksdb::DB*>(db_handle);
+  rocksdb::Iterator* iterator = db->NewIterator(rocksdb::ReadOptions());
+  return reinterpret_cast<jlong>(iterator);
 }

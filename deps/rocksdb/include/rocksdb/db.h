@@ -15,6 +15,7 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
+#include "rocksdb/version.h"
 #include "rocksdb/iterator.h"
 #include "rocksdb/options.h"
 #include "rocksdb/types.h"
@@ -40,9 +41,8 @@ struct ColumnFamilyDescriptor {
       : name(_name), options(_options) {}
 };
 
-// Update Makefile if you change these
-static const int kMajorVersion = 3;
-static const int kMinorVersion = 0;
+static const int kMajorVersion = __ROCKSDB_MAJOR__;
+static const int kMinorVersion = __ROCKSDB_MINOR__;
 
 struct Options;
 struct ReadOptions;
@@ -54,7 +54,8 @@ class Env;
 
 // Metadata associated with each SST file.
 struct LiveFileMetaData {
-  std::string name;        // Name of the file
+  std::string column_family_name;  // Name of the column family
+  std::string name;                // Name of the file
   int level;               // Level at which this file resides.
   size_t size;             // File size in bytes.
   std::string smallestkey; // Smallest user defined key in the file.
@@ -163,8 +164,8 @@ class DB {
   virtual Status Put(const WriteOptions& options,
                      ColumnFamilyHandle* column_family, const Slice& key,
                      const Slice& value) = 0;
-  Status Put(const WriteOptions& options, const Slice& key,
-             const Slice& value) {
+  virtual Status Put(const WriteOptions& options, const Slice& key,
+                     const Slice& value) {
     return Put(options, DefaultColumnFamily(), key, value);
   }
 
@@ -175,7 +176,7 @@ class DB {
   virtual Status Delete(const WriteOptions& options,
                         ColumnFamilyHandle* column_family,
                         const Slice& key) = 0;
-  Status Delete(const WriteOptions& options, const Slice& key) {
+  virtual Status Delete(const WriteOptions& options, const Slice& key) {
     return Delete(options, DefaultColumnFamily(), key);
   }
 
@@ -186,8 +187,8 @@ class DB {
   virtual Status Merge(const WriteOptions& options,
                        ColumnFamilyHandle* column_family, const Slice& key,
                        const Slice& value) = 0;
-  Status Merge(const WriteOptions& options, const Slice& key,
-               const Slice& value) {
+  virtual Status Merge(const WriteOptions& options, const Slice& key,
+                       const Slice& value) {
     return Merge(options, DefaultColumnFamily(), key, value);
   }
 
@@ -206,7 +207,7 @@ class DB {
   virtual Status Get(const ReadOptions& options,
                      ColumnFamilyHandle* column_family, const Slice& key,
                      std::string* value) = 0;
-  Status Get(const ReadOptions& options, const Slice& key, std::string* value) {
+  virtual Status Get(const ReadOptions& options, const Slice& key, std::string* value) {
     return Get(options, DefaultColumnFamily(), key, value);
   }
 
@@ -224,9 +225,9 @@ class DB {
       const ReadOptions& options,
       const std::vector<ColumnFamilyHandle*>& column_family,
       const std::vector<Slice>& keys, std::vector<std::string>* values) = 0;
-  std::vector<Status> MultiGet(const ReadOptions& options,
-                               const std::vector<Slice>& keys,
-                               std::vector<std::string>* values) {
+  virtual std::vector<Status> MultiGet(const ReadOptions& options,
+                                       const std::vector<Slice>& keys,
+                                       std::vector<std::string>* values) {
     return MultiGet(options, std::vector<ColumnFamilyHandle*>(
                                  keys.size(), DefaultColumnFamily()),
                     keys, values);
@@ -247,8 +248,8 @@ class DB {
     }
     return true;
   }
-  bool KeyMayExist(const ReadOptions& options, const Slice& key,
-                   std::string* value, bool* value_found = nullptr) {
+  virtual bool KeyMayExist(const ReadOptions& options, const Slice& key,
+                           std::string* value, bool* value_found = nullptr) {
     return KeyMayExist(options, DefaultColumnFamily(), key, value, value_found);
   }
 
@@ -260,7 +261,7 @@ class DB {
   // The returned iterator should be deleted before this db is deleted.
   virtual Iterator* NewIterator(const ReadOptions& options,
                                 ColumnFamilyHandle* column_family) = 0;
-  Iterator* NewIterator(const ReadOptions& options) {
+  virtual Iterator* NewIterator(const ReadOptions& options) {
     return NewIterator(options, DefaultColumnFamily());
   }
   // Returns iterators from a consistent database state across multiple
@@ -275,6 +276,9 @@ class DB {
   // this handle will all observe a stable snapshot of the current DB
   // state.  The caller must call ReleaseSnapshot(result) when the
   // snapshot is no longer needed.
+  //
+  // nullptr will be returned if the DB fails to take a snapshot or does
+  // not support snapshot.
   virtual const Snapshot* GetSnapshot() = 0;
 
   // Release a previously acquired snapshot.  The caller must not
@@ -297,7 +301,7 @@ class DB {
   //     of the sstables that make up the db contents.
   virtual bool GetProperty(ColumnFamilyHandle* column_family,
                            const Slice& property, std::string* value) = 0;
-  bool GetProperty(const Slice& property, std::string* value) {
+  virtual bool GetProperty(const Slice& property, std::string* value) {
     return GetProperty(DefaultColumnFamily(), property, value);
   }
 
@@ -312,7 +316,7 @@ class DB {
   virtual void GetApproximateSizes(ColumnFamilyHandle* column_family,
                                    const Range* range, int n,
                                    uint64_t* sizes) = 0;
-  void GetApproximateSizes(const Range* range, int n, uint64_t* sizes) {
+  virtual void GetApproximateSizes(const Range* range, int n, uint64_t* sizes) {
     GetApproximateSizes(DefaultColumnFamily(), range, n, sizes);
   }
 
@@ -337,26 +341,27 @@ class DB {
                               const Slice* begin, const Slice* end,
                               bool reduce_level = false,
                               int target_level = -1) = 0;
-  Status CompactRange(const Slice* begin, const Slice* end,
-                    bool reduce_level = false, int target_level = -1) {
+  virtual Status CompactRange(const Slice* begin, const Slice* end,
+                              bool reduce_level = false,
+                              int target_level = -1) {
     return CompactRange(DefaultColumnFamily(), begin, end, reduce_level,
                         target_level);
   }
 
   // Number of levels used for this DB.
   virtual int NumberLevels(ColumnFamilyHandle* column_family) = 0;
-  int NumberLevels() { return NumberLevels(DefaultColumnFamily()); }
+  virtual int NumberLevels() { return NumberLevels(DefaultColumnFamily()); }
 
   // Maximum level to which a new compacted memtable is pushed if it
   // does not create overlap.
   virtual int MaxMemCompactionLevel(ColumnFamilyHandle* column_family) = 0;
-  int MaxMemCompactionLevel() {
+  virtual int MaxMemCompactionLevel() {
     return MaxMemCompactionLevel(DefaultColumnFamily());
   }
 
   // Number of files in level-0 that would stop writes.
   virtual int Level0StopWriteTrigger(ColumnFamilyHandle* column_family) = 0;
-  int Level0StopWriteTrigger() {
+  virtual int Level0StopWriteTrigger() {
     return Level0StopWriteTrigger(DefaultColumnFamily());
   }
 
@@ -370,14 +375,14 @@ class DB {
   // Get DB Options that we use
   virtual const Options& GetOptions(ColumnFamilyHandle* column_family)
       const = 0;
-  const Options& GetOptions() const {
+  virtual const Options& GetOptions() const {
     return GetOptions(DefaultColumnFamily());
   }
 
   // Flush all mem-table data.
   virtual Status Flush(const FlushOptions& options,
                        ColumnFamilyHandle* column_family) = 0;
-  Status Flush(const FlushOptions& options) {
+  virtual Status Flush(const FlushOptions& options) {
     return Flush(options, DefaultColumnFamily());
   }
 
@@ -462,7 +467,7 @@ class DB {
 #ifndef ROCKSDB_LITE
   virtual Status GetPropertiesOfAllTables(ColumnFamilyHandle* column_family,
                                           TablePropertiesCollection* props) = 0;
-  Status GetPropertiesOfAllTables(TablePropertiesCollection* props) {
+  virtual Status GetPropertiesOfAllTables(TablePropertiesCollection* props) {
     return GetPropertiesOfAllTables(DefaultColumnFamily(), props);
   }
 #endif  // ROCKSDB_LITE

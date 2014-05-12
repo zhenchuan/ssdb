@@ -191,6 +191,10 @@ class DBImpl : public DB {
   void TEST_GetFilesMetaData(ColumnFamilyHandle* column_family,
                              std::vector<std::vector<FileMetaData>>* metadata);
 
+  Status TEST_ReadFirstRecord(const WalFileType type, const uint64_t number,
+                              SequenceNumber* sequence);
+
+  Status TEST_ReadFirstLine(const std::string& fname, SequenceNumber* sequence);
 #endif  // NDEBUG
 
   // needed for CleanupIteratorState
@@ -325,7 +329,9 @@ class DBImpl : public DB {
 
   // TODO(icanadi) free superversion_to_free and old_log outside of mutex
   Status MakeRoomForWrite(ColumnFamilyData* cfd,
-                          bool force /* flush even if there is room? */);
+                          bool force /* flush even if there is room? */,
+                          autovector<SuperVersion*>* superversions_to_free,
+                          autovector<log::Writer*>* logs_to_free);
 
   void BuildBatchGroup(Writer** last_writer,
                        autovector<WriteBatch*>* write_batch_group);
@@ -406,20 +412,24 @@ class DBImpl : public DB {
   // Greater Than or Equal to the requested SequenceNumber.
   Status RetainProbableWalFiles(VectorLogPtr& all_logs,
                                 const SequenceNumber target);
-  //  return true if
-  bool CheckWalFileExistsAndEmpty(const WalFileType type,
-                                  const uint64_t number);
 
   Status ReadFirstRecord(const WalFileType type, const uint64_t number,
-                         WriteBatch* const result);
+                         SequenceNumber* sequence);
 
-  Status ReadFirstLine(const std::string& fname, WriteBatch* const batch);
+  Status ReadFirstLine(const std::string& fname, SequenceNumber* sequence);
 #endif  // ROCKSDB_LITE
 
   void PrintStatistics();
 
   // dump rocksdb.stats to LOG
   void MaybeDumpStats();
+
+  // Return true if the current db supports snapshot.  If the current
+  // DB does not support snapshot, then calling GetSnapshot() will always
+  // return nullptr.
+  //
+  // @see GetSnapshot()
+  virtual bool IsSnapshotSupported() const;
 
   // Return the minimum empty level that could hold the total data in the
   // input level. Return the input level, if such level could not be found.
@@ -445,7 +455,19 @@ class DBImpl : public DB {
   bool log_empty_;
   ColumnFamilyHandleImpl* default_cf_handle_;
   unique_ptr<ColumnFamilyMemTablesImpl> column_family_memtables_;
-  std::deque<uint64_t> alive_log_files_;
+  struct LogFileNumberSize {
+    explicit LogFileNumberSize(uint64_t _number)
+        : number(_number), size(0), getting_flushed(false) {}
+    void AddSize(uint64_t new_size) { size += new_size; }
+    uint64_t number;
+    uint64_t size;
+    bool getting_flushed;
+  };
+  std::deque<LogFileNumberSize> alive_log_files_;
+  uint64_t total_log_size_;
+  // only used for dynamically adjusting max_total_wal_size. it is a sum of
+  // [write_buffer_size * max_write_buffer_number] over all column families
+  uint64_t max_total_in_memory_state_;
 
   std::string host_name_;
 
@@ -456,6 +478,10 @@ class DBImpl : public DB {
   WriteBatch tmp_batch_;
 
   SnapshotList snapshots_;
+
+  // cache for ReadFirstRecord() calls
+  std::unordered_map<uint64_t, SequenceNumber> read_first_record_cache_;
+  port::Mutex read_first_record_cache_mutex_;
 
   // Set of table files to protect from deletion because they are
   // part of ongoing compactions.

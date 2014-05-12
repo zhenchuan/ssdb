@@ -33,7 +33,6 @@ Iterator* DBImpl::TEST_NewInternalIterator(ColumnFamilyHandle* column_family) {
   SuperVersion* super_version = cfd->GetSuperVersion()->Ref();
   mutex_.Unlock();
   ReadOptions roptions;
-  roptions.prefix_seek = true;
   return NewInternalIterator(roptions, cfd, super_version);
 }
 
@@ -117,6 +116,17 @@ Status DBImpl::TEST_WaitForCompact() {
     bg_cv_.Wait();
   }
   return bg_error_;
+}
+
+Status DBImpl::TEST_ReadFirstRecord(const WalFileType type,
+                                    const uint64_t number,
+                                    SequenceNumber* sequence) {
+  return ReadFirstRecord(type, number, sequence);
+}
+
+Status DBImpl::TEST_ReadFirstLine(const std::string& fname,
+                                  SequenceNumber* sequence) {
+  return ReadFirstLine(fname, sequence);
 }
 }  // namespace rocksdb
 #endif  // ROCKSDB_LITE

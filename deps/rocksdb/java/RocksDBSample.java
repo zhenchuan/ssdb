@@ -3,15 +3,17 @@
 // LICENSE file in the root directory of this source tree. An additional grant
 // of patent rights can be found in the PATENTS file in the same directory.
 
-import java.util.*;
-import java.lang.*;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.ArrayList;
 import org.rocksdb.*;
 import org.rocksdb.util.SizeUnit;
 import java.io.IOException;
 
 public class RocksDBSample {
   static {
-    System.loadLibrary("rocksdbjni");
+    RocksDB.loadLibrary();
   }
 
   public static void main(String[] args) {
@@ -33,12 +35,16 @@ public class RocksDBSample {
       assert(db == null);
     }
 
+    Filter filter = new BloomFilter(10);
     options.setCreateIfMissing(true)
+        .createStatistics()
         .setWriteBufferSize(8 * SizeUnit.KB)
         .setMaxWriteBufferNumber(3)
         .setDisableSeekCompaction(true)
         .setBlockSize(64 * SizeUnit.KB)
-        .setMaxBackgroundCompactions(10);
+        .setMaxBackgroundCompactions(10)
+        .setFilter(filter);
+    Statistics stats = options.statisticsPtr();
 
     assert(options.createIfMissing() == true);
     assert(options.writeBufferSize() == 8 * SizeUnit.KB);
@@ -46,6 +52,29 @@ public class RocksDBSample {
     assert(options.disableSeekCompaction() == true);
     assert(options.blockSize() == 64 * SizeUnit.KB);
     assert(options.maxBackgroundCompactions() == 10);
+
+    assert(options.memTableFactoryName().equals("SkipListFactory"));
+    options.setMemTableConfig(
+        new HashSkipListMemTableConfig()
+            .setHeight(4)
+            .setBranchingFactor(4)
+            .setBucketCount(2000000));
+    assert(options.memTableFactoryName().equals("HashSkipListRepFactory"));
+
+    options.setMemTableConfig(
+        new HashLinkedListMemTableConfig()
+            .setBucketCount(100000));
+    assert(options.memTableFactoryName().equals("HashLinkedListRepFactory"));
+
+    options.setMemTableConfig(
+        new VectorMemTableConfig().setReservedSize(10000));
+    assert(options.memTableFactoryName().equals("VectorRepFactory"));
+
+    options.setMemTableConfig(new SkipListMemTableConfig());
+    assert(options.memTableFactoryName().equals("SkipListFactory"));
+
+    options.setTableFormatConfig(new PlainTableConfig());
+    assert(options.tableFactoryName().equals("PlainTable"));
 
     try {
       db = RocksDB.open(options, db_path_not_found);
@@ -59,6 +88,9 @@ public class RocksDBSample {
     }
     // be sure to release the c++ pointer
     db.close();
+
+    ReadOptions readOptions = new ReadOptions();
+    readOptions.setFillCache(false);
 
     try {
       db = RocksDB.open(options, db_path);
@@ -86,12 +118,18 @@ public class RocksDBSample {
       assert(value != null);
       value = db.get("world".getBytes());
       assert(value == null);
+      value = db.get(readOptions, "world".getBytes());
+      assert(value == null);
 
       byte[] testKey = "asdf".getBytes();
       byte[] testValue =
           "asdfghjkl;'?><MNBVCXZQWERTYUIOP{+_)(*&^%$#@".getBytes();
       db.put(testKey, testValue);
       byte[] testResult = db.get(testKey);
+      assert(testResult != null);
+      assert(Arrays.equals(testValue, testResult));
+      assert(new String(testValue).equals(new String(testResult)));
+      testResult = db.get(readOptions, testKey);
       assert(testResult != null);
       assert(Arrays.equals(testValue, testResult));
       assert(new String(testValue).equals(new String(testResult)));
@@ -104,6 +142,13 @@ public class RocksDBSample {
       len = db.get("asdfjkl;".getBytes(), enoughArray);
       assert(len == RocksDB.NOT_FOUND);
       len = db.get(testKey, enoughArray);
+      assert(len == testValue.length);
+
+      len = db.get(readOptions, testKey, insufficientArray);
+      assert(len > insufficientArray.length);
+      len = db.get(readOptions, "asdfjkl;".getBytes(), enoughArray);
+      assert(len == RocksDB.NOT_FOUND);
+      len = db.get(readOptions, testKey, enoughArray);
       assert(len == testValue.length);
 
       db.remove(testKey);
@@ -120,13 +165,89 @@ public class RocksDBSample {
       assert(new String(testValue).equals(
           new String(enoughArray, 0, len)));
       writeOpts.dispose();
+
+      try {
+        for (TickerType statsType : TickerType.values()) {
+          stats.getTickerCount(statsType);
+        }
+        System.out.println("getTickerCount() passed.");
+      } catch (Exception e) {
+        System.out.println("Failed in call to getTickerCount()");
+        assert(false); //Should never reach here.
+      }
+
+      try {
+        for (HistogramType histogramType : HistogramType.values()) {
+          HistogramData data = stats.geHistogramData(histogramType);
+        }
+        System.out.println("geHistogramData() passed.");
+      } catch (Exception e) {
+        System.out.println("Failed in call to geHistogramData()");
+        assert(false); //Should never reach here.
+      }
+
+      Iterator iterator = db.newIterator();
+
+      boolean seekToFirstPassed = false;
+      for (iterator.seekToFirst(); iterator.isValid(); iterator.next()) {
+        iterator.status();
+        assert(iterator.key() != null);
+        assert(iterator.value() != null);
+        seekToFirstPassed = true;
+      }
+      if(seekToFirstPassed) {
+        System.out.println("iterator seekToFirst tests passed.");
+      }
+
+      boolean seekToLastPassed = false;
+      for (iterator.seekToLast(); iterator.isValid(); iterator.prev()) {
+        iterator.status();
+        assert(iterator.key() != null);
+        assert(iterator.value() != null);
+        seekToLastPassed = true;
+      }
+
+      if(seekToLastPassed) {
+        System.out.println("iterator seekToLastPassed tests passed.");
+      }
+
+      iterator.seekToFirst();
+      iterator.seek(iterator.key());
+      assert(iterator.key() != null);
+      assert(iterator.value() != null);
+
+      System.out.println("iterator seek test passed.");
+
+      iterator.dispose();
+      System.out.println("iterator tests passed.");
+
+      iterator = db.newIterator();
+      List<byte[]> keys = new ArrayList<byte[]>();
+      for (iterator.seekToLast(); iterator.isValid(); iterator.prev()) {
+        keys.add(iterator.key());
+      }
+      iterator.dispose();
+
+      Map<byte[], byte[]> values = db.multiGet(keys);
+      assert(values.size() == keys.size());
+      for(byte[] value1 : values.values()) {
+        assert(value1 != null);
+      }
+
+      values = db.multiGet(new ReadOptions(), keys);
+      assert(values.size() == keys.size());
+      for(byte[] value1 : values.values()) {
+        assert(value1 != null);
+      }
     } catch (RocksDBException e) {
       System.err.println(e);
     }
     if (db != null) {
       db.close();
     }
-    // be sure to dispose c++ pointer
+    // be sure to dispose c++ pointers
     options.dispose();
+    readOptions.dispose();
+    filter.dispose();
   }
 }
