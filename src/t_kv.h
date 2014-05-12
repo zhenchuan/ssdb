@@ -4,6 +4,35 @@
 #include "ssdb.h"
 
 static inline
+std::vector<uint64_t> convert_chars_to_longs(Decoder &decoder){
+	std::vector<uint64_t> c;
+	uint64_t val ;
+	while((decoder.read_uint64(&val))!=-1){//读出的是little_endian ?
+		c.push_back(big_endian(val));
+	}
+	return c;
+}
+
+static inline void encode_uint64(uint64_t value,char* buf){
+	buf[7] = value & 0xff;
+	buf[6] = (value >> 8) & 0xff;
+    buf[5] = (value >> 16) & 0xff;
+    buf[4] = (value >> 24) & 0xff;
+    buf[3] = (value >> 32) & 0xff;
+    buf[2] = (value >> 40) & 0xff;
+    buf[1] = (value >> 48) & 0xff;
+    buf[0] = (value >> 56) & 0xff;
+}
+
+static inline
+std::string encode_ipinyou_zset_key(const Bytes &name){
+	std::string buf;
+	buf.append(1, DataType::IPINYOU);
+	buf.append(name.data(), name.size());
+	return buf;
+}
+
+static inline
 std::string encode_kv_key(const Bytes &key){
 	std::string buf;
 	buf.append(1, DataType::KV);

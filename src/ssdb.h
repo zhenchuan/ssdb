@@ -128,6 +128,13 @@ public:
 			std::vector<std::string> *list);
 	int qget(const Bytes &name, int64_t index, std::string *item);
 
+	//用来处理ipinyou的sortedset的场景.
+	int zset_incr(const Bytes &key, const Bytes &by, std::string *new_val, char log_type=BinlogType::SYNC);
+	int zset_range(const Bytes &key,int score,int limit,std::vector<std::string>& result) ;
+	int zset_set(const Bytes &name, const Bytes &value, char log_type=BinlogType::SYNC);
+
+
+
 private:
 	int64_t _qpush(const Bytes &name, const Bytes &item, uint64_t front_or_back_seq, char log_type=BinlogType::SYNC);
 	int _qpop(const Bytes &name, std::string *item, uint64_t front_or_back_seq, char log_type=BinlogType::SYNC);
