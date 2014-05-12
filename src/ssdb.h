@@ -130,7 +130,7 @@ public:
 
 	//用来处理ipinyou的sortedset的场景.
 	int zset_incr(const Bytes &key, const Bytes &by, std::string *new_val, char log_type=BinlogType::SYNC);
-	int zset_range(const Bytes &key,int score,int limit,std::vector<std::string>& result) ;
+	int zset_range(const Bytes &key,const uint64_t score,const uint64_t limit,std::vector<std::string>& result) ;
 	int zset_set(const Bytes &name, const Bytes &value, char log_type=BinlogType::SYNC);
 
 

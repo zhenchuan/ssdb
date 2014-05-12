@@ -25,14 +25,6 @@ static inline void encode_uint64(uint64_t value,char* buf){
 }
 
 static inline
-std::string encode_ipinyou_zset_key(const Bytes &name){
-	std::string buf;
-	buf.append(1, DataType::IPINYOU);
-	buf.append(name.data(), name.size());
-	return buf;
-}
-
-static inline
 std::string encode_kv_key(const Bytes &key){
 	std::string buf;
 	buf.append(1, DataType::KV);

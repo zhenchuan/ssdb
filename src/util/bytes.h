@@ -64,10 +64,6 @@ class Bytes{
 			return r;
 		}
 
-		int merge(const Bytes &b) const{
-			return 0;
-		}
-
 		rocksdb::Slice Slice() const{
 			return rocksdb::Slice(data_, size_);
 		}

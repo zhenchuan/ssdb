@@ -147,7 +147,7 @@ static int proc_zset(Server *serv, Link *link, const Request &req, Response *res
 	if(req.size() < 4){
 		resp->push_back("client_error");
 	}else{
-		int ret = serv->ssdb->zset(req[1], req[2], req[3]);
+		int ret = serv->ssdb->zset_set(req[1],req[2]);
 		if(ret == -1){
 			resp->push_back("error");
 		}else{
@@ -244,15 +244,11 @@ static int proc_zrange(Server *serv, Link *link, const Request &req, Response *r
 	if(req.size() < 4){
 		resp->push_back("client_error");
 	}else{
-		uint64_t offset = req[2].Uint64();
+		uint64_t score = req[2].Uint64();
 		uint64_t limit = req[3].Uint64();
-		ZIterator *it = serv->ssdb->zrange(req[1], offset, limit);
 		resp->push_back("ok");
-		while(it->next()){
-			resp->push_back(it->key);
-			resp->push_back(it->score);
-		}
-		delete it;
+		serv->ssdb->zset_range(req[1],score,limit,*resp);
+		resp->push_back("0");
 	}
 	return 0;
 }
@@ -413,7 +409,15 @@ static int _zincr(SSDB *ssdb, const Request &req, Response *resp, int dir){
 }
 
 static int proc_zincr(Server *serv, Link *link, const Request &req, Response *resp){
-	return _zincr(serv->ssdb, req, resp, 1);
+	std::string new_val;
+	int ret = serv->ssdb->zset_incr(req[1], req[2], &new_val);
+	if(ret == -1){
+		resp->push_back("error");
+	}else{
+		resp->push_back("ok");
+		resp->push_back(new_val);
+	}
+	return 0;
 }
 
 static int proc_zdecr(Server *serv, Link *link, const Request &req, Response *resp){

@@ -85,7 +85,7 @@ static RedisCommand_raw cmds_raw[] = {
 	{STRATEGY_SETEX,	"setex",		"setx", 		REPLY_STATUS},
 	{STRATEGY_ZRANGE,	"zrange",		"zrange",		REPLY_MULTI_BULK},
 	{STRATEGY_ZREVRANGE,"zrevrange",	"zrrange",		REPLY_MULTI_BULK},
-	{STRATEGY_ZADD,		"zadd",			"multi_zset", 	REPLY_INT},
+	{STRATEGY_ZADD,		"zadd",			"zset", 	REPLY_INT},
 	{STRATEGY_ZINCRBY,	"zincrby",		"zincr", 		REPLY_BULK},
 	{STRATEGY_ZRANGEBYSCORE,	"zrangebyscore",	"zscan",	REPLY_MULTI_BULK},
 	{STRATEGY_ZREVRANGEBYSCORE,	"zrevrangebyscore",	"zrscan",	REPLY_MULTI_BULK},
@@ -184,7 +184,8 @@ int RedisLink::convert_req(){
 				if(end == -1){
 					size = -1;
 				}else{
-					if(this->req_desc->strategy == STRATEGY_REMRANGEBYSCORE){
+					if(this->req_desc->strategy == STRATEGY_REMRANGEBYSCORE
+							|| this->req_desc->strategy == STRATEGY_ZRANGE){
 						size = end;
 					}else{
 						size = end - start + 1;

@@ -204,7 +204,7 @@ int SSDB::zset_set(const Bytes &key, const Bytes &value, char log_type){
 	return this->set(key,value);
 }
 
-int SSDB::zset_range(const Bytes &key,int score,int limit,std::vector<std::string>& result) {
+int SSDB::zset_range(const Bytes &key,const uint64_t score,const uint64_t limit,std::vector<std::string>& result) {
 	std::string old;
 	int ret = this->get(key,&old);
 	if(ret>0){
@@ -213,8 +213,8 @@ int SSDB::zset_range(const Bytes &key,int score,int limit,std::vector<std::strin
 			uint64_t val;
 			int i =0 ,j = 0;
 			while((decoder.read_uint64(&val))!=-1){//读出的是little_endian ?
-				uint64_t v = val >> 32;
-				if(v < score || j++ > limit){
+				uint64_t v = big_endian(val) >> 32;
+				if(v < score || ++j > limit){
 					break;
 				}
 				i ++ ;
@@ -236,7 +236,6 @@ int SSDB::zset_range(const Bytes &key,int score,int limit,std::vector<std::strin
 int SSDB::zset_incr(const Bytes &key,const Bytes &by,std::string *new_value,char log_type) {
 	Transaction trans(binlogs);
 	std::string old;
-	//rocksdb::Slice value_; //将要重新被写入的value
 	std::string value_;
 	int ret = this->get(key,&old);
 	int total_size = 0;
