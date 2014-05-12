@@ -85,7 +85,7 @@ SSDB* SSDB::open(const Config &conf, const std::string &base_dir){
 	ssdb->options.filter_policy = rocksdb::NewBloomFilterPolicy(10);
 
 	ssdb->options.block_cache = rocksdb::NewLRUCache(cache_size * 1024 * 1024);
-	ssdb->options.block_size = 4 * 1024;
+	ssdb->options.block_size = block_size * 1024;
 
 	ssdb->options.write_buffer_size = 64 * 1024 * 1024;
 	ssdb->options.max_write_buffer_number = 4;
@@ -95,16 +95,15 @@ SSDB* SSDB::open(const Config &conf, const std::string &base_dir){
 	ssdb->options.target_file_size_base = 1024 * 1024 * 64;
 	//ssdb->options.target_file_size_multiplier = 10;
 
-	ssdb->options.inplace_update_support = true;
+	ssdb->options.inplace_update_support = false;
 
-	//ssdb->options.compaction_style = rocksdb::CompactionStyle::kCompactionStyleUniversal;
-	ssdb->options.compaction_style = rocksdb::CompactionStyle::kCompactionStyleLevel;
+	ssdb->options.compaction_style = rocksdb::CompactionStyle::kCompactionStyleLevel;//rocksdb::CompactionStyle::kCompactionStyleUniversal
 
 	ssdb->options.level0_file_num_compaction_trigger = 4;
 	ssdb->options.level0_stop_writes_trigger = 12;
 	ssdb->options.level0_slowdown_writes_trigger = 8;
 
-	ssdb->options.disable_seek_compaction = true;
+	ssdb->options.disable_seek_compaction = false;
 	//ssdb->options.bytes_per_sync = 4 * 1024 * 1024 ;
 
 	//ssdb->options.allow_os_buffer = true;
