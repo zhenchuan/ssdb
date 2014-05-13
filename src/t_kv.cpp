@@ -229,8 +229,10 @@ int SSDB::zset_range(const Bytes &key,const uint64_t score,const uint64_t limit,
 				result.push_back(old.substr(0,offset));
 			}
 		}
+		return 1;
+	}else{
+		return 0;
 	}
-	return 1;
 }
 
 int SSDB::zset_incr(const Bytes &key,const Bytes &by,std::string *new_value,char log_type) {
@@ -274,11 +276,9 @@ int SSDB::zset_incr(const Bytes &key,const Bytes &by,std::string *new_value,char
 			}
 
 		}
-		//TODO 更高效的排序方式.
+		//TODO 更高效的排序方式.因为这里部分是排序的..
 		std::sort(olds.begin(),olds.end(),std::greater<uint64_t>());
 
-
-		std::string buf;
 		for(int j=0;j<olds.size();j++){
 			char encoded[sizeof(uint64_t)];
 			encode_uint64(olds.at(j),encoded);

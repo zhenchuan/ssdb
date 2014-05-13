@@ -247,8 +247,8 @@ static int proc_zrange(Server *serv, Link *link, const Request &req, Response *r
 		uint64_t score = req[2].Uint64();
 		uint64_t limit = req[3].Uint64();
 		resp->push_back("ok");
-		serv->ssdb->zset_range(req[1],score,limit,*resp);
-		resp->push_back("0");
+		int ret = serv->ssdb->zset_range(req[1],score,limit,*resp);
+		if(ret > 0)resp->push_back("0");
 	}
 	return 0;
 }
