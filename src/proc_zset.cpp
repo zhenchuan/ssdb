@@ -409,7 +409,7 @@ static int _zincr(SSDB *ssdb, const Request &req, Response *resp, int dir){
 }
 
 static int proc_zincr(Server *serv, Link *link, const Request &req, Response *resp){
-	std::string new_val = "0";
+	std::string new_val;
 	int ret = serv->ssdb->zset_incr(req[1], req[2], &new_val);
 	if(ret == -1){
 		resp->push_back("error");

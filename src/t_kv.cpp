@@ -288,7 +288,7 @@ int SSDB::zset_incr(const Bytes &key,const Bytes &by,std::string *new_value,char
 		total_size = olds.size();
 	}
 
-	//*new_value = int64_to_str(total_size);
+	*new_value = int64_to_str(total_size);
 	std::string buf = encode_kv_key(key);
 	binlogs->Put(buf,value_);
 	binlogs->add_log(log_type, BinlogCommand::KSET, buf);
