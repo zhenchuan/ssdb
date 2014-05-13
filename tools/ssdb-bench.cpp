@@ -225,9 +225,9 @@ int main(int argc, char **argv){
 	bench("hget");
 	bench("hdel");
 
-	bench("zset");
-	bench("zget");
-	bench("zdel");
+	//bench("zset");
+	//bench("zrange");
+	//bench("zdel");
 
 	bench("qpush");
 	bench("qpop");
