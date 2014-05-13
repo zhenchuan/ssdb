@@ -1,8 +1,10 @@
 include ../build_config.mk
 
-OBJS += -lz -lbz2 ../src/link.o ../src/util/fde.o ../src/util/log.o ../src/util/bytes.o ../src/util/ds_network.o
+OBJS += ../src/link.o ../src/util/fde.o ../src/util/log.o ../src/util/bytes.o ../src/util/ds_network.o
 CFLAGS += -I../src
+CLIBS  += -lz -lbz2 
 EXES = ssdb-bench ssdb-dump ssdb-repair leveldb-import
+
 
 all: ssdb-bench.o ssdb-dump.o ssdb-repair.o leveldb-import.o
 	g++ -o ssdb-bench ssdb-bench.o ${OBJS} ${UTIL_OBJS} ${CLIBS}
