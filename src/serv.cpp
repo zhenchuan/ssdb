@@ -128,6 +128,7 @@ static proc_map_t proc_map;
 	DEF_PROC(clear_binlog);
 	DEF_PROC(ping);
 	DEF_PROC(select);
+	DEF_PROC(expire);
 #undef DEF_PROC
 
 
@@ -225,7 +226,9 @@ static Command commands[] = {
 
 	PROC(ttl, "wt"),
 	PROC(ping, "r"),
+
 	PROC(select,"r"),
+	PROC(expire,"r"),
 
 	{NULL, NULL, 0, NULL}
 };
@@ -475,6 +478,11 @@ static int proc_ping(Server *serv, Link *link, const Request &req, Response *res
 }
 static int proc_select(Server *serv,Link *link,const Request &req,Response *resp){
 	resp->push_back("ok");
+	return 0;
+}
+static int proc_expire(Server *serv,Link *link,const Request &req,Response *resp){
+	resp->push_back("ok");
+	resp->push_back("0");
 	return 0;
 }
 
