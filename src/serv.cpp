@@ -127,6 +127,7 @@ static proc_map_t proc_map;
 	DEF_PROC(ttl);
 	DEF_PROC(clear_binlog);
 	DEF_PROC(ping);
+	DEF_PROC(select);
 #undef DEF_PROC
 
 
@@ -224,6 +225,7 @@ static Command commands[] = {
 
 	PROC(ttl, "wt"),
 	PROC(ping, "r"),
+	PROC(select,"r"),
 
 	{NULL, NULL, 0, NULL}
 };
@@ -468,6 +470,10 @@ static int proc_ttl(Server *serv, Link *link, const Request &req, Response *resp
 }
 
 static int proc_ping(Server *serv, Link *link, const Request &req, Response *resp){
+	resp->push_back("ok");
+	return 0;
+}
+static int proc_select(Server *serv,Link *link,const Request &req,Response *resp){
 	resp->push_back("ok");
 	return 0;
 }
