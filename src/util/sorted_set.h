@@ -9,15 +9,19 @@
 class SortedSet
 {
 public:
+	bool empty() const{
+		return size() == 0;
+	}
 	int size() const;
 	int add(const std::string &key, int64_t score);
 	int del(const std::string &key);
-	// key will be pointed to the first time if SortedSet not empty
+	// key will be pointed to the first item if SortedSet not empty
 	int front(const std::string **key, int64_t *score=NULL) const;
 	// the first item is copied into key if SortedSet not empty
 	int front(std::string *key, int64_t *score=NULL) const;
 	int pop_front();
-	
+	int pop_back();
+
 	/*
 	class Iterator
 	{
@@ -35,13 +39,13 @@ private:
 	{
 		std::string key;
 		int64_t score;
-		
+
 		bool operator<(const Item& b) const{
 			return this->score < b.score
 				|| (this->score == b.score && this->key < b.key);
 		}
 	};
-	
+
 	std::map<std::string, std::set<Item>::iterator> existed;
 	std::set<Item> sorted_set;
 };

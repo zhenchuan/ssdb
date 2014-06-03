@@ -228,7 +228,7 @@ static Command commands[] = {
 	PROC(ping, "r"),
 
 	PROC(select,"r"),
-	PROC(expire,"r"),
+	PROC(expire,"wt"),
 
 	{NULL, NULL, 0, NULL}
 };
@@ -481,6 +481,17 @@ static int proc_select(Server *serv,Link *link,const Request &req,Response *resp
 	return 0;
 }
 static int proc_expire(Server *serv,Link *link,const Request &req,Response *resp){
+	if(req.size() != 3){
+		resp->push_back("client_error");
+	}else{
+		int ret;
+		ret = serv->expiration->set_ttl(req[1], req[2].Int());
+		if(ret != -1){
+			resp->push_back("ok");
+			resp->push_back("1");
+			return 0;
+		}
+	}
 	resp->push_back("ok");
 	resp->push_back("0");
 	return 0;
