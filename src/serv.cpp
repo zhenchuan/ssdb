@@ -460,18 +460,6 @@ static int proc_key_range(Server *serv, Link *link, const Request &req, Response
 	return 0;
 }
 
-static int proc_ttl(Server *serv, Link *link, const Request &req, Response *resp){
-	if(req.size() == 1 || (req.size() - 1) % 2 != 0){
-		resp->push_back("client_error");
-	}else{
-		for(int i=1; i<req.size(); i+=2){
-			serv->expiration->set_ttl(req[i], req[i+1].Int());
-		}
-		resp->push_back("ok");
-	}
-	return 0;
-}
-
 static int proc_ping(Server *serv, Link *link, const Request &req, Response *resp){
 	resp->push_back("ok");
 	return 0;
@@ -480,22 +468,38 @@ static int proc_select(Server *serv,Link *link,const Request &req,Response *resp
 	resp->push_back("ok");
 	return 0;
 }
-static int proc_expire(Server *serv,Link *link,const Request &req,Response *resp){
+
+static int proc_ttl(Server *serv, Link *link, const Request &req, Response *resp){
+	if(req.size() != 2){
+		resp->push_back("client_error");
+	}else{
+		int64_t ttl = serv->expiration->get_ttl(req[1]);
+		resp->push_back("ok");
+		resp->push_back(int64_to_str(ttl));
+	}
+	return 0;
+}
+
+static int proc_expire(Server *serv, Link *link, const Request &req, Response *resp){
 	if(req.size() != 3){
 		resp->push_back("client_error");
 	}else{
-		int ret;
-		ret = serv->expiration->set_ttl(req[1], req[2].Int());
-		if(ret != -1){
-			resp->push_back("ok");
-			resp->push_back("1");
-			return 0;
+		std::string val;
+		int ret = serv->ssdb->get(req[1], &val);
+		if(ret == 1){
+			ret = serv->expiration->set_ttl(req[1], req[2].Int());
+			if(ret != -1){
+				resp->push_back("ok");
+				resp->push_back("1");
+				return 0;
+			}
 		}
+		resp->push_back("ok");
+		resp->push_back("0");
 	}
-	resp->push_back("ok");
-	resp->push_back("0");
 	return 0;
 }
+
 
 #include "proc_kv.cpp"
 #include "proc_hash.cpp"
