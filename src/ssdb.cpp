@@ -51,12 +51,16 @@ SSDB* SSDB::open(const Config &conf, const std::string &base_dir){
 	size_t cache_size = (size_t)conf.get_num("rocksdb.cache_size");
 	int write_buffer_size = conf.get_num("rocksdb.write_buffer_size");
 	int block_size = conf.get_num("rocksdb.block_size");
-	//int compaction_speed = conf.get_num("rocksdb.compaction_speed");
+	std::string disable_seek_compaction = conf.get_str("rocksdb.disable_seek_compaction");
 	std::string compression = conf.get_str("rocksdb.compression");
 
 	strtolower(&compression);
 	if(compression != "yes"){
 		compression = "no";
+	}
+	strtolower(&disable_seek_compaction);
+	if(disable_seek_compaction!="no"){
+		disable_seek_compaction = "yes";
 	}
 
 	if(cache_size <= 0){
@@ -75,7 +79,7 @@ SSDB* SSDB::open(const Config &conf, const std::string &base_dir){
 	log_info("cache_size       : %d MB", cache_size);
 	log_info("block_size       : %d KB", block_size);
 	log_info("write_buffer     : %d MB", write_buffer_size);
-	//log_info("compaction_speed : %d MB/s", compaction_speed);
+	log_info("disable_seek_compaction : %s", disable_seek_compaction.c_str());
 	log_info("compression      : %s", compression.c_str());
 
 	SSDB *ssdb = new SSDB();
@@ -93,11 +97,13 @@ SSDB* SSDB::open(const Config &conf, const std::string &base_dir){
 	ssdb->options.block_cache = rocksdb::NewLRUCache(cache_size * 1024 * 1024);
 	ssdb->options.block_size = block_size * 1024;
 
+	//The idea is to keep level0_file_num_compaction_trigger * write_buffer_size = max_bytes_for_level_base to minimize write amplification.
 	ssdb->options.write_buffer_size = 64 * 1024 * 1024;
 	ssdb->options.max_write_buffer_number = 4;
 	ssdb->options.min_write_buffer_number_to_merge = 2;
 	//ssdb->options.compaction_speed = compaction_speed;
 
+	//Options.target_file_size_base and Options.max_bytes_for_level_base are for L1.
 	ssdb->options.target_file_size_base = 1024 * 1024 * 64;
 	//ssdb->options.target_file_size_multiplier = 10;
 
@@ -109,7 +115,6 @@ SSDB* SSDB::open(const Config &conf, const std::string &base_dir){
 	ssdb->options.level0_stop_writes_trigger = 12;
 	ssdb->options.level0_slowdown_writes_trigger = 8;
 
-	ssdb->options.disable_seek_compaction = false;
 	//ssdb->options.bytes_per_sync = 4 * 1024 * 1024 ;
 
 	//ssdb->options.allow_os_buffer = true;
@@ -121,6 +126,12 @@ SSDB* SSDB::open(const Config &conf, const std::string &base_dir){
 		ssdb->options.compression = rocksdb::kSnappyCompression;
 	}else{
 		ssdb->options.compression = rocksdb::kNoCompression;
+	}
+
+	if(disable_seek_compaction=="yes"){
+		ssdb->options.disable_seek_compaction = true;
+	}else{
+		ssdb->options.disable_seek_compaction = false;
 	}
 
 	rocksdb::Status status;
