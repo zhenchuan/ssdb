@@ -24,6 +24,7 @@ class SSDB{
 private:
 	rocksdb::DB* db;
 	rocksdb::DB* meta_db;
+	rocksdb::DB* expiry_db;
 	rocksdb::Options options;
 
 
@@ -51,6 +52,8 @@ public:
 	int raw_set(const Bytes &key, const Bytes &val) const;
 	int raw_del(const Bytes &key) const;
 	int raw_get(const Bytes &key, std::string *val) const;
+	int expiry_set(const Bytes &key,int64_t ttl) const;
+	int64_t expiry_get(const Bytes &key) const;
 
 	/* key value */
 

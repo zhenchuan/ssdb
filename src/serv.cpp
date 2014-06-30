@@ -333,6 +333,28 @@ void Server::proc(ProcJob *job){
 }
 
 
+void Server::bool_reply(Response *resp, int ret, const char *errmsg){
+	if(ret == -1){
+		resp->push_back("error");
+		if(errmsg){
+			resp->push_back(errmsg);
+		}
+	}else if(ret == 0){
+		resp->push_back("ok");
+		resp->push_back("0");
+	}else{
+		resp->push_back("ok");
+		resp->push_back("1");
+	}
+}
+
+void Server::int_reply(Response *resp, int num){
+	resp->push_back("ok");
+	char buf[20];
+	sprintf(buf, "%d", num);
+	resp->push_back(buf);
+}
+
 Server::ProcWorker::ProcWorker(const std::string &name){
 	this->name = name;
 }
@@ -473,7 +495,8 @@ static int proc_ttl(Server *serv, Link *link, const Request &req, Response *resp
 	if(req.size() != 2){
 		resp->push_back("client_error");
 	}else{
-		int64_t ttl = serv->expiration->get_ttl(req[1]);
+		//int64_t ttl = serv->expiration->get_ttl(req[1]);
+		int64_t ttl = serv->ssdb->expiry_get(req[1]);
 		resp->push_back("ok");
 		resp->push_back(int64_to_str(ttl));
 	}
@@ -481,13 +504,14 @@ static int proc_ttl(Server *serv, Link *link, const Request &req, Response *resp
 }
 
 static int proc_expire(Server *serv, Link *link, const Request &req, Response *resp){
-	if(req.size() != 3){
+	if(req.size() != 3){//cmd key time
 		resp->push_back("client_error");
 	}else{
 		std::string val;
 		int ret = serv->ssdb->get(req[1], &val);
 		if(ret == 1){
-			ret = serv->expiration->set_ttl(req[1], req[2].Int());
+			ret = serv->ssdb->expiry_set(req[1], req[2].Int());
+			//ret = serv->expiration->set_ttl(req[1], req[2].Int());
 			if(ret != -1){
 				resp->push_back("ok");
 				resp->push_back("1");

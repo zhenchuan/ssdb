@@ -13,6 +13,7 @@
 SSDB::SSDB(){
 	db = NULL;
 	meta_db = NULL;
+	expiry_db = NULL;
 	binlogs = NULL;
 }
 
@@ -37,13 +38,17 @@ SSDB::~SSDB(){
 	if(meta_db){
 		delete meta_db;
 	}
+	if(expiry_db){
+		delete expiry_db;
+	}
 	log_debug("SSDB finalized");
 }
 
 SSDB* SSDB::open(const Config &conf, const std::string &base_dir){
 	std::string main_db_path = base_dir + "/data";
+	std::string expiry_db_path = base_dir + "/expiry";
 	std::string meta_db_path = base_dir + "/meta";
-	int cache_size = conf.get_num("rocksdb.cache_size");
+	size_t cache_size = (size_t)conf.get_num("rocksdb.cache_size");
 	int write_buffer_size = conf.get_num("rocksdb.write_buffer_size");
 	int block_size = conf.get_num("rocksdb.block_size");
 	//int compaction_speed = conf.get_num("rocksdb.compaction_speed");
@@ -66,6 +71,7 @@ SSDB* SSDB::open(const Config &conf, const std::string &base_dir){
 
 	log_info("main_db          : %s", main_db_path.c_str());
 	log_info("meta_db          : %s", meta_db_path.c_str());
+	log_info("expiry_db          : %s", expiry_db_path.c_str());
 	log_info("cache_size       : %d MB", cache_size);
 	log_info("block_size       : %d KB", block_size);
 	log_info("write_buffer     : %d MB", write_buffer_size);
@@ -122,6 +128,16 @@ SSDB* SSDB::open(const Config &conf, const std::string &base_dir){
 		rocksdb::Options options;
 		options.create_if_missing = true;
 		status = rocksdb::DB::Open(options, meta_db_path, &ssdb->meta_db);
+		if(!status.ok()){
+			goto err;
+		}
+	}
+
+	{
+		rocksdb::Options options;
+		options.create_if_missing = true;
+		options.write_buffer_size = 64 * 1024 * 1024;
+		status = rocksdb::DB::Open(options,expiry_db_path,&ssdb->expiry_db);
 		if(!status.ok()){
 			goto err;
 		}
@@ -209,6 +225,41 @@ Iterator* SSDB::rev_iterator(const std::string &start, const std::string &end, u
 
 
 /* raw operates */
+
+int64_t SSDB::expiry_get(const Bytes &key) const {
+	std::string val;
+	rocksdb::ReadOptions opts;
+	opts.fill_cache = false;
+	rocksdb::Status s = expiry_db->Get(opts, key.Slice(), &val);
+	if(s.IsNotFound()){
+		return 0;
+	}
+	if(!s.ok()){
+		log_error("get error: %s", s.ToString().c_str());
+		return -1;
+	}
+	int64_t ex = str_to_int64(val);
+	return (ex - time_second());
+}
+
+int SSDB::expiry_set(const Bytes &key, const int64_t ttl) const{
+
+	int64_t expired = time_second() + ttl ;
+	char data[30];
+	int size = snprintf(data, sizeof(data), "%" PRId64, expired);
+	if(size <= 0){
+		log_error("snprintf return error!");
+		return -1;
+	}
+
+	rocksdb::WriteOptions write_opts;
+	rocksdb::Status s = expiry_db->Put(write_opts, key.Slice(), Bytes(data, size).Slice());
+	if(!s.ok()){
+		log_error("set error: %s", s.ToString().c_str());
+		return -1;
+	}
+	return 1;
+}
 
 int SSDB::raw_set(const Bytes &key, const Bytes &val) const{
 	rocksdb::WriteOptions write_opts;

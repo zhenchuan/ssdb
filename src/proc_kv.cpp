@@ -80,7 +80,7 @@ static int proc_setx(Server *serv, Link *link, const Request &req, Response *res
 		resp->push_back("error");
 		return 0;
 	}
-	ret = serv->expiration->set_ttl(req[1], req[3].Int());
+	ret = serv->ssdb->expiry_set(req[1], req[3].Int());
 	if(ret == -1){
 		resp->push_back("error");
 		return 0;

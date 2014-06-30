@@ -208,7 +208,7 @@ int SSDB::zset_range(const Bytes &key,const uint64_t score,const uint64_t limit,
 	std::string old;
 	int ret = this->get(key,&old);
 	if(ret>0){
-		if(score > 0){
+		if(score > 0){//按score过滤
 			Decoder decoder(old.data(),old.size());
 			uint64_t val;
 			int i =0 ,j = 0;
@@ -242,9 +242,9 @@ int SSDB::zset_incr(const Bytes &key,const Bytes &by,std::string *new_value,char
 	int ret = this->get(key,&old);
 	int total_size = 0;
 
-	if(ret == -1 ){
+	if(ret == -1 ){//获得key对应的value出错.
 		return -1;
-	}else if(ret == 0){
+	}else if(ret == 0){//key不存在value值.
 		value_ = by.String();
 		total_size = by.size()/sizeof(uint64_t);
 	}else{
@@ -290,7 +290,7 @@ int SSDB::zset_incr(const Bytes &key,const Bytes &by,std::string *new_value,char
 
 	*new_value = int64_to_str(total_size);
 	std::string buf = encode_kv_key(key);
-	binlogs->Put(buf,value_);
+	binlogs->Put(buf,value_);//转化为kv操作存储.
 	binlogs->add_log(log_type, BinlogCommand::KSET, buf);
 
 	rocksdb::Status s = binlogs->commit();

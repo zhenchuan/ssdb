@@ -43,6 +43,12 @@ static inline int64_t time_ms(){
 	return now.tv_sec * 1000 + now.tv_usec/1000;
 }
 
+static inline int64_t time_second(){
+	struct timeval now;
+	gettimeofday(&now,NULL);
+	return now.tv_sec;
+}
+
 class DataType{
 public:
 	static const char SYNCLOG	= 1;
