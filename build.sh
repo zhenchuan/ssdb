@@ -13,7 +13,7 @@ case "$TARGET_OS" in
 		#PLATFORM_CFLAGS=""
         ;;
     Linux)
-        PLATFORM_CLIBS="-pthread"
+        PLATFORM_CLIBS="-pthread -lrt"
         ;;
     CYGWIN_*)
         PLATFORM_CLIBS="-lpthread"
