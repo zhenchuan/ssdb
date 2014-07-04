@@ -456,6 +456,14 @@ static int proc_info(Server *serv, Link *link, const Request &req, Response *res
 		}
 	}
 	
+	size_t peak_rss_ = peak_rss();
+	resp->push_back("peak.memory.usage");
+	resp->push_back(std::to_string(peak_rss_));
+
+	size_t cur_rss  = current_rss();
+	resp->push_back("current.memory.usage");
+	resp->push_back(std::to_string(cur_rss));
+
 	return 0;
 }
 

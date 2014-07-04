@@ -120,8 +120,7 @@ SSDB* SSDB::open(const Config &conf, const std::string &base_dir){
 	//ssdb->options.allow_os_buffer = true;
 
 	//ssdb->options.allow_mmap_writes = true;
-
-	//ssdb->options.statistics = rocksdb::CreateDBStatistics();
+	ssdb->options.statistics = rocksdb::CreateDBStatistics();
 	if(compression == "yes"){
 		ssdb->options.compression = rocksdb::kSnappyCompression;
 	}else{
@@ -209,7 +208,7 @@ err:
 Iterator* SSDB::iterator(const std::string &start, const std::string &end, uint64_t limit) const{
 	rocksdb::Iterator *it;
 	rocksdb::ReadOptions iterate_options;
-	iterate_options.fill_cache = false;//??? filter是每个block一个还是每个sstable一个?
+	iterate_options.fill_cache = false;//??? filter是每个block一个还是每个sstable一个? | 每个sstable.
 	iterate_options.tailing = false;
 	it = db->NewIterator(iterate_options);
 	it->Seek(start);

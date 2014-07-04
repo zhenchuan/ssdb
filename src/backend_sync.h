@@ -10,7 +10,7 @@
 #include "link.h"
 #include "binlog.h"
 #include "util/thread.h"
-
+//启用后台线程,处理slave的请求.
 class BackendSync{
 	private:
 		struct Client;

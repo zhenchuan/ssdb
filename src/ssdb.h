@@ -6,6 +6,7 @@
 
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
+#include "rocksdb/statistics.h"
 
 #include "util/log.h"
 #include "util/bytes.h"
@@ -27,13 +28,12 @@ private:
 	rocksdb::DB* expiry_db;
 	rocksdb::Options options;
 
-
 	std::vector<Slave *> slaves;
 	
 	SSDB();
 public:
 	BinlogQueue *binlogs;
-	
+
 	~SSDB();
 	static SSDB* open(const Config &conf, const std::string &base_dir);
 

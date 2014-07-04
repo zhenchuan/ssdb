@@ -5,7 +5,7 @@
 #include "t_zset.h"
 #include "t_queue.h"
 #include "include.h"
-
+//处理master发过来的请求.
 Slave::Slave(SSDB *ssdb, rocksdb::DB* meta_db, const char *ip, int port, bool is_mirror){
 	thread_quit = false;
 	this->ssdb = ssdb;
@@ -234,6 +234,7 @@ int Slave::proc(const std::vector<Bytes> &req){
 		case BinlogType::SYNC:
 		case BinlogType::MIRROR:{
 			if(++sync_count % 1000 == 1){
+				//这里last_seq同seq是相等的.
 				log_info("sync_count: %" PRIu64 ", last_seq: %" PRIu64 ", seq: %" PRIu64 "",
 					sync_count, this->last_seq, log.seq());
 			}
@@ -260,7 +261,9 @@ int Slave::proc_noop(const Binlog &log, const std::vector<Bytes> &req){
 	}
 	return 0;
 }
-
+//2014-07-03 11:41:57.465 [INFO ] slave.cpp(224): copy_count: 114778001, last_seq: 35243, seq: 35243
+//2014-07-03 11:41:57.517 [INFO ] slave.cpp(271): copy end, copy_count: 114778968, last_seq: 35243, seq: 35243
+//2014-07-03 11:41:57.568 [INFO ] slave.cpp(238): sync_count: 12001, last_seq: 36108, seq: 36109
 int Slave::proc_copy(const Binlog &log, const std::vector<Bytes> &req){
 	switch(log.cmd()){
 		case BinlogCommand::BEGIN:
@@ -270,7 +273,7 @@ int Slave::proc_copy(const Binlog &log, const std::vector<Bytes> &req){
 			log_info("copy end, copy_count: %" PRIu64 ", last_seq: %" PRIu64 ", seq: %" PRIu64,
 				copy_count, this->last_seq, log.seq());
 			this->last_key = "";
-			this->save_status();
+			this->save_status();//在meta_db中存入this.last_key,this.last_seq
 			break;
 		default:
 			return proc_sync(log, req);
@@ -419,9 +422,9 @@ int Slave::proc_sync(const Binlog &log, const std::vector<Bytes> &req){
 			log_error("unknown binlog, type=%d, cmd=%d", log.type(), log.cmd());
 			break;
 	}
-	this->last_seq = log.seq();
+	this->last_seq = log.seq();//
 	if(log.type() == BinlogType::COPY){
-		this->last_key = log.key().String();
+		this->last_key = log.key().String();//copy的时候,把key记录下来.
 	}
 	this->save_status();
 	return 0;
