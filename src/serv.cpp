@@ -5,6 +5,7 @@
 #include "t_kv.h"
 #include "t_hash.h"
 #include "t_zset.h"
+#include "perf.h"
 
 struct BytesEqual{
 	bool operator()(const Bytes &s1, const Bytes &s2) const {
@@ -463,6 +464,11 @@ static int proc_info(Server *serv, Link *link, const Request &req, Response *res
 	size_t cur_rss  = current_rss();
 	resp->push_back("current.memory.usage");
 	resp->push_back(std::to_string(cur_rss));
+
+	resp->push_back("stats:");
+	char buf[100];
+	perf::report(buf);
+	resp->push_back(buf);
 
 	return 0;
 }

@@ -9,6 +9,7 @@
 #include "t_kv.h"
 #include "t_hash.h"
 #include "t_zset.h"
+#include "perf.h"
 
 SSDB::SSDB(){
 	db = NULL;
@@ -270,6 +271,7 @@ int SSDB::expiry_set(const Bytes &key, const int64_t ttl) const{
 	}
 	return 1;
 }
+//end of expiry
 
 int SSDB::raw_set(const Bytes &key, const Bytes &val) const{
 	rocksdb::WriteOptions write_opts;

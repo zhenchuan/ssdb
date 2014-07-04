@@ -18,6 +18,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <atomic>
 
 #include "version.h"
 
@@ -36,7 +37,6 @@
 
 static const int SSDB_SCORE_WIDTH		= 9;
 static const int SSDB_KEY_LEN_MAX		= 255;
-
 
 
 static inline double millitime(){

@@ -1,6 +1,7 @@
 #include "t_kv.h"
 #include "util/strings.h"
 #include "rocksdb/write_batch.h"
+#include "perf.h"
 
 int SSDB::multi_set(const std::vector<Bytes> &kvs, int offset, char log_type){
 	Transaction trans(binlogs);
@@ -52,6 +53,7 @@ int SSDB::set(const Bytes &key, const Bytes &val, char log_type){
 		//return -1;
 		return 0;
 	}
+	perf::incrSets();
 	Transaction trans(binlogs);
 
 	std::string buf = encode_kv_key(key);
@@ -154,9 +156,11 @@ int SSDB::incr(const Bytes &key, int64_t by, std::string *new_val, char log_type
 }
 //kv结构的Get默认的fill_cache=true
 int SSDB::get(const Bytes &key, std::string *val) const{
+	perf::incrGets();
 	std::string buf = encode_kv_key(key);
 	rocksdb::Status s = db->Get(rocksdb::ReadOptions(), buf, val);
 	if(s.IsNotFound()){
+		perf::incrEmptyGets();
 		return 0;
 	}
 	if(!s.ok()){
