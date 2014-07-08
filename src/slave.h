@@ -12,6 +12,7 @@ class Slave{
 	private:
 		uint64_t last_seq;
 		std::string last_key;
+		std::string last_key_;
 		uint64_t copy_count;
 		uint64_t sync_count;
 		
@@ -46,7 +47,7 @@ class Slave{
 	public:
 		Slave(SSDB *ssdb, rocksdb::DB* meta_db, const char *ip, int port, bool is_mirror=false);
 		~Slave();
-		void start();
+		void start(const std::string &last_key_);
 		void stop();
 		
 		void set_id(const std::string &id);

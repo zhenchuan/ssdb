@@ -59,7 +59,7 @@ void* BackendSync::_run_thread(void *arg){
 	SSDB *ssdb = (SSDB *)backend->ssdb;
 	BinlogQueue *logs = ssdb->binlogs;
 
-	Client client(backend);
+	Client client(backend);//每个thread包含一个client对象
 	client.link = link;
 	client.init();
 
@@ -76,14 +76,14 @@ void* BackendSync::_run_thread(void *arg){
 			client.reset();
 			continue;
 		}
-		
-		bool is_empty = true;
+		//注意:以下两个操作 sync:只是一条记录,同时会更新last_seq,然后是copy,这里批量进行一批数据(1w次)的操作,copy时传给client的seq就是前面的sync操作更新的.
+		bool is_empty = true;//表示是否有数据
 		// WARN: MUST do first sync() before first copy(), because
 		// sync() will refresh last_seq, and copy() will not
 		if(client.sync(logs)){
 			is_empty = false;
 		}
-		if(client.status == Client::COPY){
+		if(client.status == Client::COPY){//copy_end 后,这个状态会改变
 			if(client.copy()){
 				is_empty = false;
 			}
@@ -135,8 +135,8 @@ BackendSync::Client::~Client(){
 		iter = NULL;
 	}
 }
-
-void BackendSync::Client::init(){
+//确定client的同步方式是sync还是copy,同时读取client已经保存的状态
+void BackendSync::Client::init(){//slave.cpp#120 link->send("sync140", seq_buf, this->last_key, type);
 	const std::vector<Bytes> *req = this->link->last_recv();
 	last_seq = 0;
 	if(req->size() > 1){
@@ -152,7 +152,7 @@ void BackendSync::Client::init(){
 			is_mirror = true;
 		}
 	}
-	const char *type = is_mirror? "mirror" : "sync";
+	const char *type = is_mirror? "mirror" : "sync";//TODO 加入latest_sync,即从最新处开始同步.
 	if(last_key == "" && last_seq != 0){
 		log_info("[%s] %s:%d fd: %d, sync, seq: %" PRIu64 ", key: '%s'",
 			type,
@@ -161,7 +161,7 @@ void BackendSync::Client::init(){
 			last_seq, hexmem(last_key.data(), last_key.size()).c_str()
 			);
 		this->status = Client::SYNC;
-	}else{
+	}else{//在slave.cpp中 ,copy_end 后 this->last_key = "";另外只有copy时,client会记录last_key到本地.
 		// a slave must reset its last_key when receiving 'copy_end' command
 		log_info("[%s] %s:%d fd: %d, copy recover, seq: %" PRIu64 ", key: '%s'",
 			type,
@@ -172,7 +172,7 @@ void BackendSync::Client::init(){
 		this->status = Client::COPY;
 	}
 }
-
+//状态从OUT_OF_SYNC 转为 COPY ,此时last_seq=0,last_key=0
 void BackendSync::Client::reset(){
 	log_info("%s:%d fd: %d, copy begin", link->remote_ip, link->remote_port, link->fd());
 	this->status = Client::COPY;
@@ -226,7 +226,7 @@ int BackendSync::Client::copy(){
 			goto copy_end;
 		}
 		Bytes val = iter->val();
-		this->last_key = key.String();
+		this->last_key = key.String();//last_key 更新
 			
 		char cmd = 0;
 		char data_type = key.data()[0];
@@ -244,7 +244,7 @@ int BackendSync::Client::copy(){
 		
 		ret = 1;
 		
-		Binlog log(this->last_seq, BinlogType::COPY, cmd, key.Slice());
+		Binlog log(this->last_seq, BinlogType::COPY, cmd, key.Slice());//这个last_seq在执行sync时已经发生变化.
 		log_trace("fd: %d, %s", link->fd(), log.dumps().c_str());
 		link->send(log.repr(), val);
 	}
@@ -252,7 +252,7 @@ int BackendSync::Client::copy(){
 
 copy_end:		
 	log_info("%s:%d fd: %d, copy end", link->remote_ip, link->remote_port, link->fd());
-	this->status = Client::SYNC;
+	this->status = Client::SYNC;//状态变为sync
 	delete this->iter;
 	this->iter = NULL;
 
@@ -268,7 +268,7 @@ int BackendSync::Client::sync(BinlogQueue *logs){
 		int ret = 0;
 		uint64_t expect_seq = this->last_seq + 1;
 		if(this->status == Client::COPY && this->last_seq == 0){
-			ret = logs->find_last(&log);
+			ret = logs->find_last(&log);//找到最后一条记录.
 		}else{
 			ret = logs->find_next(expect_seq, &log);
 		}

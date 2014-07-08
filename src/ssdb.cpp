@@ -185,14 +185,16 @@ SSDB* SSDB::open(const Config &conf, const std::string &base_dir){
 					is_mirror = false;
 				}
 				
+				std::string last_key = c->get_str("last_key");
+
 				std::string id = c->get_str("id");
 				
-				log_info("slaveof: %s:%d, type: %s", ip.c_str(), port, type.c_str());
+				log_info("slaveof: %s:%d, type: %s,settled last_key:", ip.c_str(), port, type.c_str());
 				Slave *slave = new Slave(ssdb, ssdb->meta_db, ip.c_str(), port, is_mirror);
 				if(!id.empty()){
 					slave->set_id(id);
 				}
-				slave->start();
+				slave->start(last_key);
 				ssdb->slaves.push_back(slave);
 			}
 		}

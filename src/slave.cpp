@@ -45,10 +45,16 @@ Slave::~Slave(){
 	log_debug("Slave finalized");
 }
 
-void Slave::start(){
-	load_status();
+void Slave::start(const std::string &last_key_){
+	load_status();//从metadb中读取状态.
 	log_debug("last_seq: %" PRIu64 ", last_key: %s",
 		last_seq, hexmem(last_key.data(), last_key.size()).c_str());
+
+	if(!last_key_.empty()){
+		this->last_key = last_key_;
+		log_warn("last_seq: %" PRIu64 ", last_key: %s",
+			last_seq, hexmem(last_key.data(), last_key.size()).c_str());
+	}
 
 	thread_quit = false;
 	int err = pthread_create(&run_thread_tid, NULL, &Slave::_run_thread, this);
@@ -86,7 +92,7 @@ void Slave::load_status(){
 		if(val.size() < sizeof(uint64_t)){
 			log_error("invalid format of status");
 		}else{
-			last_seq = *((uint64_t *)(val.data()));
+			last_seq = *((uint64_t *)(val.data()));//char to uint64
 			last_key.assign(val.data() + sizeof(uint64_t), val.size() - sizeof(uint64_t));
 		}
 	}
@@ -95,7 +101,7 @@ void Slave::load_status(){
 void Slave::save_status(){
 	std::string key = status_key();
 	std::string val;
-	val.append((char *)&this->last_seq, sizeof(uint64_t));
+	val.append((char *)&this->last_seq, sizeof(uint64_t));//uint64 to char
 	val.append(this->last_key);
 	meta_db->Put(rocksdb::WriteOptions(), key, val);
 }
@@ -117,7 +123,7 @@ int Slave::connect(){
 			
 			const char *type = is_mirror? "mirror" : "sync";
 			
-			link->send("sync140", seq_buf, this->last_key, type);
+			link->send("sync140", seq_buf, this->last_key, type);//发送同步请求.
 			if(link->flush() == -1){
 				log_error("[%s]network error", this->id_.c_str());
 				delete link;
@@ -272,7 +278,7 @@ int Slave::proc_copy(const Binlog &log, const std::vector<Bytes> &req){
 		case BinlogCommand::END:
 			log_info("copy end, copy_count: %" PRIu64 ", last_seq: %" PRIu64 ", seq: %" PRIu64,
 				copy_count, this->last_seq, log.seq());
-			this->last_key = "";
+			this->last_key = "";//
 			this->save_status();//在meta_db中存入this.last_key,this.last_seq
 			break;
 		default:
@@ -424,7 +430,8 @@ int Slave::proc_sync(const Binlog &log, const std::vector<Bytes> &req){
 	}
 	this->last_seq = log.seq();//
 	if(log.type() == BinlogType::COPY){
-		this->last_key = log.key().String();//copy的时候,把key记录下来.
+		//copy的时候,把key记录下来. copy end后,变成this.last_key被重置为"";
+		this->last_key = log.key().String();
 	}
 	this->save_status();
 	return 0;
