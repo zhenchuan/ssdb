@@ -29,11 +29,11 @@ private:
 	rocksdb::Options options;
 
 	std::vector<Slave *> slaves;
-	bool disable_ttl = false;
 	
 	SSDB();
 public:
 	BinlogQueue *binlogs;
+	bool disable_ttl = false;
 
 	~SSDB();
 	static SSDB* open(const Config &conf, const std::string &base_dir);

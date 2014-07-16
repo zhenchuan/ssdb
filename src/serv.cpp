@@ -127,6 +127,8 @@ static proc_map_t proc_map;
 	DEF_PROC(key_range);
 	DEF_PROC(ttl);
 	DEF_PROC(clear_binlog);
+	DEF_PROC(disable_ttl);
+	DEF_PROC(enable_ttl);
 	DEF_PROC(ping);
 	DEF_PROC(select);
 	DEF_PROC(expire);
@@ -216,6 +218,8 @@ static Command commands[] = {
 	PROC(qget, "r"),
 
 	PROC(clear_binlog, "wt"),
+	PROC(disable_ttl,"w"),
+	PROC(enable_ttl,"w"),
 
 	PROC(dump, "b"),
 	PROC(sync140, "b"),
@@ -389,6 +393,18 @@ int Server::ProcWorker::proc(ProcJob *job){
 
 static int proc_clear_binlog(Server *serv, Link *link, const Request &req, Response *resp){
 	serv->ssdb->binlogs->flush();
+	resp->push_back("ok");
+	return 0;
+}
+
+static int proc_enable_ttl(Server *serv,Link *link,const Request &req,Response *resp){
+	serv->ssdb->disable_ttl = false;
+	resp->push_back("ok");
+	return 0;
+}
+
+static int proc_disable_ttl(Server *serv,Link *link,const Request &req,Response *resp){
+	serv->ssdb->disable_ttl = true;
 	resp->push_back("ok");
 	return 0;
 }
