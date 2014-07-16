@@ -29,6 +29,7 @@ private:
 	rocksdb::Options options;
 
 	std::vector<Slave *> slaves;
+	bool disable_ttl = false;
 	
 	SSDB();
 public:

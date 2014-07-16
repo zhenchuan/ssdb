@@ -304,8 +304,8 @@ void run(int argc, char **argv){
 
 
 void welcome(){
-	fprintf(stderr, "ssdb %s\n", SSDB_VERSION);
-	fprintf(stderr, "Copyright (c) 2012-2014 ideawu.com\n");
+	fprintf(stderr, "cmdb %s\n", SSDB_VERSION);
+	fprintf(stderr, "Copyright (c) 2012-2014 spark\n");
 	fprintf(stderr, "\n");
 }
 
@@ -441,11 +441,9 @@ void init(int argc, char **argv){
 		int perm = conf->get_num("server.unixsocketperm");
 
 		if(strlen(path)){
-			//fprintf(stderr,"using unix domain socket,path:%s perm:%d\n",path,perm);
 			unlink(path);
 			serv_link = Link::listen(perm,path);
 		}else{
-			//fprintf(stderr,"using tcp protocol,ip:%s port:%d\n",ip,port);
 			serv_link = Link::listen(ip, port);
 		}
 

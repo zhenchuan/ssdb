@@ -54,6 +54,7 @@ SSDB* SSDB::open(const Config &conf, const std::string &base_dir){
 	int block_size = conf.get_num("rocksdb.block_size");
 	std::string disable_seek_compaction = conf.get_str("rocksdb.disable_seek_compaction");
 	std::string compression = conf.get_str("rocksdb.compression");
+	std::string disablettl = conf.get_str("server.disablettl");
 
 	strtolower(&compression);
 	if(compression != "yes"){
@@ -82,8 +83,10 @@ SSDB* SSDB::open(const Config &conf, const std::string &base_dir){
 	log_info("write_buffer     : %d MB", write_buffer_size);
 	log_info("disable_seek_compaction : %s", disable_seek_compaction.c_str());
 	log_info("compression      : %s", compression.c_str());
+	log_info("disable_ttl      : %s", disablettl.c_str());
 
 	SSDB *ssdb = new SSDB();
+	ssdb->disable_ttl = (disablettl == "yes" ? true:false);
 	//
 	auto env = rocksdb::Env::Default();
 	env->SetBackgroundThreads(10,rocksdb::Env::LOW);
@@ -240,6 +243,7 @@ Iterator* SSDB::rev_iterator(const std::string &start, const std::string &end, u
 /* raw operates */
 
 int64_t SSDB::expiry_get(const Bytes &key) const {
+	if(disable_ttl)return 0;
 	std::string val;
 	rocksdb::ReadOptions opts;
 	opts.fill_cache = false;
@@ -256,7 +260,7 @@ int64_t SSDB::expiry_get(const Bytes &key) const {
 }
 
 int SSDB::expiry_set(const Bytes &key, const int64_t ttl) const{
-
+	if(disable_ttl) return 0;
 	int64_t expired = time_second() + ttl ;
 	char data[30];
 	int size = snprintf(data, sizeof(data), "%" PRId64, expired);

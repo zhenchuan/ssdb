@@ -525,7 +525,6 @@ static int proc_expire(Server *serv, Link *link, const Request &req, Response *r
 		int ret = serv->ssdb->get(req[1], &val);
 		if(ret == 1){
 			ret = serv->ssdb->expiry_set(req[1], req[2].Int());
-			//ret = serv->expiration->set_ttl(req[1], req[2].Int());
 			if(ret != -1){
 				resp->push_back("ok");
 				resp->push_back("1");
