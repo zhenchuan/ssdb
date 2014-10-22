@@ -109,8 +109,12 @@ int main(int argc, char **argv){
 	rocksdb::Options options;
 	rocksdb::Status status;
 	options.create_if_missing = true;
-	options.write_buffer_size = 32 * 1024 * 1024;
-	options.compression = rocksdb::kSnappyCompression;
+
+    options.write_buffer_size = 64 * 1024 * 1024;
+    options.min_write_buffer_number_to_merge = 2;
+    options.max_write_buffer_number = 4;
+    options.target_file_size_base = 1024 * 1024 * 64;
+    options.compression = rocksdb::kSnappyCompression;
 
 	status = rocksdb::DB::Open(options, data_dir.c_str(), &db);
 	if(!status.ok()){
