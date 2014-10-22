@@ -208,7 +208,7 @@ int main(int argc, char **argv){
 			fprintf(stderr, "%s\n", val.c_str());
 		}
 	}
-
+	/****
 	fprintf(stderr, "compacting data...\n");
 	db->CompactRange(NULL, NULL);
 	
@@ -218,7 +218,7 @@ int main(int argc, char **argv){
 			fprintf(stderr, "%s\n", val.c_str());
 		}
 	}
-
+	****/
 	printf("backup has been made to folder: %s\n", output_folder);
 	
 	delete link;
